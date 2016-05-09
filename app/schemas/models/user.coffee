@@ -335,6 +335,8 @@ _.extend UserSchema.properties,
       endDate: c.stringDate()
     }
   }
+  enrollmentRequestSent: { type: 'boolean' }
+  
   schoolName: {type: 'string'}
   role: {type: 'string', enum: ["God", "advisor", "parent", "principal", "student", "superintendent", "teacher", "technology coordinator"]}
   birthday: c.stringDate({title: "Birthday"})
