@@ -13,6 +13,51 @@ Course = require '../../../server/models/Course'
 CourseInstance = require '../../../server/models/CourseInstance'
 request = require '../request'
 
+describe 'POST /db/prepaid', ->
+  beforeEach utils.wrap (done) ->
+    yield utils.clearModels([User, Prepaid])
+    admin = yield utils.initAdmin()
+    yield utils.loginUser(admin)
+    done()
+  
+  it 'creates a new prepaid for type "course"', utils.wrap (done) ->
+    user = yield utils.initUser()
+    [res, body] = yield request.postAsync({url: getURL('/db/prepaid'), json: {
+      type: 'course'
+      creator: user.id
+    }})
+    expect(res.statusCode).toBe(201)
+    prepaid = yield Prepaid.findById(res.body._id)
+    expect(prepaid).toBeDefined()
+    expect(prepaid.get('creator').equals(user._id)).toBe(true)
+    expect(prepaid.get('code')).toBeDefined()
+    done()
+    
+  it 'does not work for non-admins', utils.wrap (done) ->
+    user = yield utils.initUser()
+    yield utils.loginUser(user)
+    [res, body] = yield request.postAsync({url: getURL('/db/prepaid'), json: {
+      type: 'course'
+      creator: user.id
+    }})
+    expect(res.statusCode).toBe(403)
+    done()
+    
+  it 'accepts start and end dates', utils.wrap (done) ->
+    user = yield utils.initUser()
+    [res, body] = yield request.postAsync({url: getURL('/db/prepaid'), json: {
+      type: 'course'
+      creator: user.id
+      startDate: new Date().toISOString(2001,1,1)
+      endDate: new Date().toISOString(2010,1,1)
+    }})
+    expect(res.statusCode).toBe(201)
+    prepaid = yield Prepaid.findById(res.body._id)
+    expect(prepaid).toBeDefined()
+    expect(prepaid.get('startDate')).toBeDefined()
+    expect(prepaid.get('endDate')).toBeDefined()
+    done()
+
 describe '/db/prepaid', ->
   prepaidURL = getURL('/db/prepaid')
   prepaidCreateURL = getURL('/db/prepaid/-/create')

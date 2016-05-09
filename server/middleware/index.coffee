@@ -10,6 +10,7 @@ module.exports =
   healthcheck: require './healthcheck'
   named: require './named'
   patchable: require './patchable'
+  prepaids: require './prepaids'
   rest: require './rest'
   trialRequests: require './trial-requests'
   users: require './users'

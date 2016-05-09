@@ -77,6 +77,8 @@ module.exports.setup = (app) ->
   
   app.delete('/db/user/:handle', mw.users.removeFromClassrooms)
   app.get('/db/user', mw.users.fetchByGPlusID, mw.users.fetchByFacebookID)
+  
+  app.post('/db/prepaid', mw.auth.checkHasPermission(['admin']), mw.prepaids.post)
 
   app.get '/db/products', require('./db/product').get
   

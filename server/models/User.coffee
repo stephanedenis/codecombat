@@ -80,6 +80,15 @@ UserSchema.methods.trackActivity = (activityName, increment) ->
   activity[activityName].last = now
   @set 'activity', activity
   activity
+  
+UserSchema.statics.search = (term, done) ->
+  utils = require '../lib/utils'
+  if utils.isID(term)
+    query = {_id: mongoose.Types.ObjectId(term)}
+  else
+    term = term.toLowerCase()
+    query = $or: [{nameLower: term}, {emailLower: term}]
+  return User.findOne(query).exec(done)
 
 emailNameMap =
   generalNews: 'announcement'
