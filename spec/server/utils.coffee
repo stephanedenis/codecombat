@@ -6,6 +6,7 @@ User = require '../../server/models/User'
 Level = require '../../server/models/Level'
 Achievement = require '../../server/models/Achievement'
 Campaign = require '../../server/models/Campaign'
+Course = require '../../server/models/Course'
 campaignSchema = require '../../app/schemas/models/campaign.schema'
 campaignLevelProperties = _.keys(campaignSchema.properties.levels.additionalProperties.properties)
 campaignAdjacentCampaignProperties = _.keys(campaignSchema.properties.adjacentCampaigns.additionalProperties.properties)
@@ -125,3 +126,10 @@ module.exports = mw =
     request.post { uri: getURL('/db/campaign'), json: data }, (err, res) ->
       return done(err) if err
       Campaign.findById(res.body._id).exec done
+      
+  makeCourse: Promise.promisify (data, sources, done) ->
+    args = Array.from(arguments)
+    [done, [data, sources]] = [args.pop(), args]
+    
+    course = new Course(data or {})
+    course.save(done)

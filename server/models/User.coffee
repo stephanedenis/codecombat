@@ -33,6 +33,7 @@ UserSchema.index({'siteref': 1}, {name: 'siteref index', sparse: true})
 UserSchema.index({'schoolName': 1}, {name: 'schoolName index', sparse: true})
 UserSchema.index({'country': 1}, {name: 'country index', sparse: true})
 UserSchema.index({'role': 1}, {name: 'role index', sparse: true})
+UserSchema.index({'coursePrepaid._id': 1}, {name: 'course prepaid id index', sparse: true})
 
 UserSchema.post('init', ->
   @set('anonymous', false) if @get('email')
@@ -328,9 +329,18 @@ UserSchema.post 'save', (doc) ->
   doc.newsSubsChanged = not _.isEqual(_.pick(doc.get('emails'), mail.NEWS_GROUPS), _.pick(doc.startingEmails, mail.NEWS_GROUPS))
   UserSchema.statics.updateServiceSettings(doc)
 
+DEFAULT_START_DATE = new Date(2016,5,20).toISOString()
+DEFAULT_END_DATE = new Date(2017,5,20).toISOString()
+  
 UserSchema.post 'init', (doc) ->
   doc.wasTeacher = doc.isTeacher()
   doc.startingEmails = _.cloneDeep(doc.get('emails'))
+  if @get('coursePrepaidID') and not @get('coursePrepaid')
+    @set('coursePrepaid', {
+      _id: @get('coursePrepaidID')
+      startDate: DEFAULT_START_DATE
+      endDate: DEFAULT_END_DATE
+    })
 
 UserSchema.statics.hashPassword = (password) ->
   password = password.toLowerCase()
