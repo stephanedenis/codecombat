@@ -10,6 +10,9 @@ jsonSchema = require '../../app/schemas/models/prepaid.schema'
 PrepaidSchema.index({code: 1}, { unique: true })
 PrepaidSchema.index({'redeemers.userID': 1})
 
+PrepaidSchema.statics.DEFAULT_START_DATE = new Date(2016,5,20).toISOString()
+PrepaidSchema.statics.DEFAULT_END_DATE = new Date(2017,5,20).toISOString()
+
 PrepaidSchema.statics.generateNewCode = (done) ->
   # Deprecated for not following Node callback convention. TODO: Remove
   tryCode = ->
@@ -40,6 +43,10 @@ PrepaidSchema.pre('save', (next) ->
 
 PrepaidSchema.post 'init', (doc) ->
   doc.set('maxRedeemers', parseInt(doc.get('maxRedeemers') ? 0))
+  if not @get('startDate')
+    @set('startDate', Prepaid.DEFAULT_START_DATE)
+  if not @get('endDate')
+    @set('endDate', Prepaid.DEFAULT_END_DATE)
 
 PrepaidSchema.statics.postEditableProperties = [
   'creator', 'maxRedeemers', 'properties', 'type', 'startDate', 'endDate'

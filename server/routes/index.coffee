@@ -79,6 +79,7 @@ module.exports.setup = (app) ->
   app.get('/db/user', mw.users.fetchByGPlusID, mw.users.fetchByFacebookID)
   
   app.post('/db/prepaid', mw.auth.checkHasPermission(['admin']), mw.prepaids.post)
+  app.post('/db/prepaid/:handle/redeemers', mw.prepaids.redeem)
 
   app.get '/db/products', require('./db/product').get
   
