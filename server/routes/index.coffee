@@ -78,6 +78,7 @@ module.exports.setup = (app) ->
   app.delete('/db/user/:handle', mw.users.removeFromClassrooms)
   app.get('/db/user', mw.users.fetchByGPlusID, mw.users.fetchByFacebookID)
   
+  app.get('/db/prepaid', mw.auth.checkLoggedIn(), mw.prepaids.fetchByCreator)
   app.post('/db/prepaid', mw.auth.checkHasPermission(['admin']), mw.prepaids.post)
   app.post('/db/prepaid/:handle/redeemers', mw.prepaids.redeem)
 

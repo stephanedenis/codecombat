@@ -3,10 +3,15 @@ errors = require '../commons/errors'
 database = require '../commons/database'
 Prepaid = require '../models/Prepaid'
 User = require '../models/User'
+mongoose = require 'mongoose'
+
+cutoffDate = new Date(2015,11,11)
+cutoffID = mongoose.Types.ObjectId(Math.floor(cutoffDate/1000).toString(16)+'0000000000000000')
 
 module.exports =
   logError: (user, msg) ->
     console.warn "Prepaid Error: [#{user.get('slug')} (#{user._id})] '#{msg}'"
+    
     
   post: wrap (req, res) ->
     validTypes = ['course']
@@ -27,6 +32,7 @@ module.exports =
     database.validateDoc(prepaid)
     yield prepaid.save()
     res.status(201).send(prepaid.toObject())
+    
 
   redeem: wrap (req, res) ->
     if not req.user?.isTeacher()
@@ -36,8 +42,7 @@ module.exports =
     if not prepaid
       throw new errors.NotFound('Prepaid not found.')
       
-    cutoff = new Date(2015,11,11)
-    if prepaid._id.getTimestamp().getTime() < cutoff.getTime()
+    if prepaid._id.getTimestamp().getTime() < cutoffDate.getTime()
       throw new errors.Forbidden('Cannot redeem from prepaids older than November 11, 2015')
     unless prepaid.get('creator').equals(req.user._id)
       throw new errors.Forbidden('You may not redeem enrollments from this prepaid')
@@ -85,3 +90,23 @@ module.exports =
     redeemers.push({ date: new Date(), userID: user._id })
     prepaid.set('redeemers', redeemers)
     res.status(201).send(prepaid.toObject({req: req}))
+
+    
+  fetchByCreator: wrap (req, res, next) ->
+    creator = req.query.creator
+    return next() if not creator
+    
+    unless req.user.isAdmin() or creator is req.user.id
+      throw new errors.Forbidden('Must be logged in as given creator')
+    unless database.isID(creator)
+      throw new errors.UnprocessableEntity('Invalid creator')
+      
+    q = {
+      _id: { $gt: cutoffID }
+      creator: mongoose.Types.ObjectId(creator)
+      endDate: { $gt: new Date().toISOString() }
+      type: 'course'
+    }
+
+    prepaids = yield Prepaid.find(q)
+    res.send((prepaid.toObject({req: req}) for prepaid in prepaids))
