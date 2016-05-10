@@ -7,6 +7,8 @@ Level = require '../../server/models/Level'
 Achievement = require '../../server/models/Achievement'
 Campaign = require '../../server/models/Campaign'
 Course = require '../../server/models/Course'
+Prepaid = require '../../server/models/Prepaid'
+moment = require 'moment'
 campaignSchema = require '../../app/schemas/models/campaign.schema'
 campaignLevelProperties = _.keys(campaignSchema.properties.levels.additionalProperties.properties)
 campaignAdjacentCampaignProperties = _.keys(campaignSchema.properties.adjacentCampaigns.additionalProperties.properties)
@@ -133,3 +135,19 @@ module.exports = mw =
     
     course = new Course(data or {})
     course.save(done)
+
+  makePrepaid: Promise.promisify (data, sources, done) ->
+    args = Array.from(arguments)
+    [done, [data, sources]] = [args.pop(), args]
+    
+    data = _.extend({}, {
+      type: 'course'
+      maxRedeemers: 9001
+      endDate: moment().add(1, 'month').toISOString()
+      startDate: new Date().toISOString()
+    }, data)
+
+    request.post { uri: getURL('/db/prepaid'), json: data }, (err, res) ->
+      return done(err) if err
+      expect(res.statusCode).toBe(201)
+      Prepaid.findById(res.body._id).exec done

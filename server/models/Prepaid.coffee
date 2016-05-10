@@ -9,6 +9,7 @@ jsonSchema = require '../../app/schemas/models/prepaid.schema'
 
 PrepaidSchema.index({code: 1}, { unique: true })
 PrepaidSchema.index({'redeemers.userID': 1})
+PrepaidSchema.index({owner: 1, endDate: 1}, { sparse: true })
 
 PrepaidSchema.statics.DEFAULT_START_DATE = new Date(2016,5,20).toISOString()
 PrepaidSchema.statics.DEFAULT_END_DATE = new Date(2017,5,20).toISOString()
