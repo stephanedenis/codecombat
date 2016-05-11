@@ -8,6 +8,7 @@ module.exports =
   courses: require './courses'
   files: require './files'
   healthcheck: require './healthcheck'
+  levels: require './levels'
   named: require './named'
   patchable: require './patchable'
   prepaids: require './prepaids'

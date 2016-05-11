@@ -270,6 +270,12 @@ UserSchema.methods.level = ->
   a = 5
   b = c = 100
   if xp > 0 then Math.floor(a * Math.log((1 / b) * (xp + c))) + 1 else 1
+    
+UserSchema.methods.isEnrolled = ->
+  coursePrepaid = @get('coursePrepaid')
+  return false unless coursePrepaid
+  return true unless coursePrepaid.endDate
+  return coursePrepaid.endDate > new Date().toISOString()
 
 UserSchema.statics.saveActiveUser = (id, event, done=null) ->
   # TODO: Disabling this until we know why our app servers CPU grows out of control.

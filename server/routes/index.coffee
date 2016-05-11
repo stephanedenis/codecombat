@@ -75,6 +75,8 @@ module.exports.setup = (app) ->
   app.post('/db/course_instance/:handle/members', mw.auth.checkLoggedIn(), mw.courseInstances.addMembers)
   app.get('/db/course_instance/:handle/classroom', mw.auth.checkLoggedIn(), mw.courseInstances.fetchClassroom)
   
+  app.get('/db/level/:handle/session', mw.auth.checkHasUser(), mw.levels.upsertSession)
+  
   app.delete('/db/user/:handle', mw.users.removeFromClassrooms)
   app.get('/db/user', mw.users.fetchByGPlusID, mw.users.fetchByFacebookID)
   

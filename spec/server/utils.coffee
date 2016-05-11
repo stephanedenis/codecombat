@@ -8,6 +8,8 @@ Achievement = require '../../server/models/Achievement'
 Campaign = require '../../server/models/Campaign'
 Course = require '../../server/models/Course'
 Prepaid = require '../../server/models/Prepaid'
+Classroom = require '../../server/models/Classroom'
+CourseInstance = require '../../server/models/CourseInstance'
 moment = require 'moment'
 campaignSchema = require '../../app/schemas/models/campaign.schema'
 campaignLevelProperties = _.keys(campaignSchema.properties.levels.additionalProperties.properties)
@@ -129,12 +131,13 @@ module.exports = mw =
       return done(err) if err
       Campaign.findById(res.body._id).exec done
       
-  makeCourse: Promise.promisify (data, sources, done) ->
-    args = Array.from(arguments)
-    [done, [data, sources]] = [args.pop(), args]
+  makeCourse: (data={}, sources={}) ->
     
-    course = new Course(data or {})
-    course.save(done)
+    if sources.campaign and not data.campaignID
+      data.campaignID = sources.campaign._id
+    
+    course = new Course(data)
+    return course.save()
 
   makePrepaid: Promise.promisify (data, sources, done) ->
     args = Array.from(arguments)
@@ -151,3 +154,35 @@ module.exports = mw =
       return done(err) if err
       expect(res.statusCode).toBe(201)
       Prepaid.findById(res.body._id).exec done
+      
+  makeClassroom: (data={}, sources={}) -> co ->
+    data = _.extend({}, {
+      name: _.uniqueId('Classroom ')
+    }, data)
+    
+    [res, body] = yield request.postAsync { uri: getURL('/db/classroom'), json: data }
+    expect(res.statusCode).toBe(201)
+    classroom = yield Classroom.findById(res.body._id)
+    if sources.members
+      classroom.set('members', _.map(sources.members, '_id'))
+      yield classroom.save()
+    return classroom
+
+  makeCourseInstance: (data={}, sources={}) -> co ->
+    if sources.course and not data.courseID
+      data.courseID = sources.course.id
+    if sources.classroom and not data.classroomID
+      data.classroomID = sources.classroom.id
+
+    [res, body] = yield request.postAsync({ uri: getURL('/db/course_instance'), json: data })
+    expect(res.statusCode).toBe(200)
+    courseInstance = yield CourseInstance.findById(res.body._id)
+    if sources.members
+      userIDs = _.map(sources.members, 'id')
+      [res, body] = yield request.postAsync({
+        url: getURL("/db/course_instance/#{courseInstance.id}/members")
+        json: { userIDs: userIDs }
+      })
+      expect(res.statusCode).toBe(200)
+      courseInstance = yield CourseInstance.findById(res.body._id)
+    return courseInstance
