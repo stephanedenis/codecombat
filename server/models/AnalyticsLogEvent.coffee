@@ -6,15 +6,10 @@ http = require 'http'
 config = require '../../server_config'
 
 AnalyticsLogEventSchema = new mongoose.Schema({
-  u: mongoose.Schema.Types.ObjectId
-  e: Number  # event analytics.string ID
-  p: mongoose.Schema.Types.Mixed
-
-  # TODO: Remove these legacy properties after we stop querying for them (probably 30 days, ~2/16/15)
-  user: mongoose.Schema.Types.ObjectId
+  user: String #Actually a `mongoose.Schema.Types.ObjectId` but ...
   event: String
   properties: mongoose.Schema.Types.Mixed
-}, {strict: false})
+}, {strict: false, versionKey: false})
 
 AnalyticsLogEventSchema.index({event: 1, _id: -1})
 AnalyticsLogEventSchema.index({event: 1, 'properties.level': 1})
@@ -30,23 +25,15 @@ AnalyticsLogEventSchema.statics.logEvent = (user, event, properties={}) ->
     user: user
     event: event
     properties: properties
-  if config.isProduction and not config.unittest
-    docString = JSON.stringify doc
-    headers =
-      "Content-Type":'application/json'
-      "Content-Length": docString.length
 
-    options =
-      host: 'analytics.codecombat.com'
-      port: 80
-      path: '/analytics'
-      method: 'POST'
-      headers: headers
-    req = http.request options, (res) ->
-    req.on 'error', (e) -> log.warn e
-    req.write(docString)
-    req.end()
-  else
-    doc.save()
+  doc.save()
 
-module.exports = AnalyticsLogEvent = mongoose.model('analytics.log.event', AnalyticsLogEventSchema)
+unless config.proxy
+  analyticsMongoose = mongoose.createConnection()
+  analyticsMongoose.open config.mongo.analytics_replica_string, (error) ->
+    if error
+      log.error "Couldn't connect to analytics", error
+    else
+      log.info "Connected to analytics mongo at #{config.mongo.analytics_replica_string}"
+
+  module.exports = AnalyticsLogEvent = analyticsMongoose.model('analytics.log.event', AnalyticsLogEventSchema, config.mongo.analytics_collection)

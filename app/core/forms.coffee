@@ -45,7 +45,7 @@ module.exports.applyErrorsToForm = (el, errors, warning=false) ->
   for error in errors
     if error.code is tv4.errorCodes.OBJECT_REQUIRED
       prop = _.last(_.string.words(error.message)) # hack
-      message = 'Required field'
+      message = $.i18n.t('common.required_field')
     
     else if error.dataPath
       prop = error.dataPath[1..]
@@ -56,6 +56,14 @@ module.exports.applyErrorsToForm = (el, errors, warning=false) ->
       message = message[0].toUpperCase() + message[1..]
       message = error.message if error.formatted
       prop = error.property
+
+    if error.code is tv4.errorCodes.FORMAT_CUSTOM
+      originalMessage = /Format validation failed \(([^\(\)]+)\)/.exec(message)[1]
+      unless _.isEmpty(originalMessage)
+        message = originalMessage
+    
+    if error.code is 409 and error.property is 'email'
+      message += ' <a class="login-link">Log in?</a>'
 
     missingErrors.push error unless setErrorToProperty el, prop, message, warning
   missingErrors

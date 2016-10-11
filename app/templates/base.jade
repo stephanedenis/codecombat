@@ -9,7 +9,7 @@ block header
         a(href="/")
           span.glyphicon.glyphicon-home
         a(href='/teachers', data-i18n="nav.teachers")
-        a(href='/courses', data-i18n="nav.students")
+        a(href='/students', data-i18n="nav.students")
         a(href=view.forumLink(), data-i18n="nav.forum")
         a(href='/community', data-i18n="nav.community")
 
@@ -32,13 +32,13 @@ block header
                 a(href="/user/#{me.getSlugOrID()}", data-i18n="nav.profile")
               li
                 a(href="/account/settings", data-i18n="play.settings")
-              unless me.isStudent()
+              if me.isAdmin() || !(me.isTeacher() || me.isStudent())
                 li
                   a(href="/account/payments", data-i18n="account.payments")
-              if me.hasSubscription() || !(me.isTeacher() || me.isStudent())
+              if me.isAdmin() || !(me.isTeacher() || me.isStudent()) || me.hasSubscription()
                 li
                   a(href="/account/subscription", data-i18n="account.subscription")
-              unless me.isStudent()
+              if me.isAdmin() || !(me.isTeacher() || me.isStudent())
                 li
                   a(href="/account/prepaid", data-i18n="account.prepaid_codes")
               li
@@ -63,13 +63,13 @@ block footer
 
     #footer-links
       a(href="/about", data-i18n="nav.about")
-      a(tabindex=-1, data-toggle="coco-modal", data-target="core/ContactModal", data-i18n="nav.contact")
+      a.contact-modal(tabindex=-1, data-i18n="nav.contact")
       a(href='http://blog.codecombat.com/', data-i18n="nav.blog")
       a(href='https://jobs.lever.co/codecombat', tabindex=-1, data-i18n="nav.careers")
       a(href='/legal', tabindex=-1, data-i18n="nav.legal")
       a(href='/privacy', tabindex=-1, data-i18n="legal.privacy_title")
       a(href='/contribute', tabindex=-1, data-i18n="nav.contribute")
-      a(href='/play/ladder', tabindex=-1, data-i18n="home.multiplayer")
+      a(href='/play/ladder', tabindex=-1, data-i18n="game_menu.multiplayer_tab")
       if me.isAdmin()
         a(href='/admin') Admin
 

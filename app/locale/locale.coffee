@@ -36,15 +36,19 @@ module.exports =
   'fa': { nativeDescription: 'فارسی', englishDescription: 'Persian' }
   'gl': { nativeDescription: 'Galego', englishDescription: 'Galician' }
   'ko': { nativeDescription: '한국어', englishDescription: 'Korean' }
+  'haw': { nativeDescription: 'ʻŌlelo Hawaiʻi', englishDescription: 'Hawaiian' }
+  'he': { nativeDescription: 'עברית', englishDescription: 'Hebrew' }
+  'hr': { nativeDescription: 'hrvatski jezik', englishDescription: 'Croatian' }
+  'hu': { nativeDescription: 'magyar', englishDescription: 'Hungarian' }
   'id': { nativeDescription: 'Bahasa Indonesia', englishDescription: 'Indonesian' }
   'it': { nativeDescription: 'Italiano', englishDescription: 'Italian' }
-  'he': { nativeDescription: 'עברית', englishDescription: 'Hebrew' }
-  'hu': { nativeDescription: 'magyar', englishDescription: 'Hungarian' }
   'lt': { nativeDescription: 'lietuvių kalba', englishDescription: 'Lithuanian' }
+  'mi': { nativeDescription: 'te reo Māori', englishDescription: 'Māori' }
   'mk-MK': { nativeDescription: 'Македонски', englishDescription: 'Macedonian' }
   'hi': { nativeDescription: 'मानक हिन्दी', englishDescription: 'Hindi' }
   'ms': { nativeDescription: 'Bahasa Melayu', englishDescription: 'Bahasa Malaysia' }
   'my': { nativeDescription: 'မြန်မာစကား', englishDescription: 'Myanmar language' }
+  'nl': { nativeDescription: 'Nederlands', englishDescription: 'Dutch' }
   'nl-BE': { nativeDescription: 'Nederlands (België)', englishDescription: 'Dutch (Belgium)' }
   'nl-NL': { nativeDescription: 'Nederlands (Nederland)', englishDescription: 'Dutch (Netherlands)' }
   'ja': { nativeDescription: '日本語', englishDescription: 'Japanese' }
@@ -53,7 +57,7 @@ module.exports =
   'uz': { nativeDescription: "O'zbekcha", englishDescription: 'Uzbek' }
   'pl': { nativeDescription: 'język polski', englishDescription: 'Polish' }
   'pt-PT': { nativeDescription: 'Português (Portugal)', englishDescription: 'Portuguese (Portugal)' }
-  'pt-BR': { nativeDescription: 'português do Brasil', englishDescription: 'Portuguese (Brazil)' }
+  'pt-BR': { nativeDescription: 'Português (Brasil)', englishDescription: 'Portuguese (Brazil)' }
   'ro': { nativeDescription: 'limba română', englishDescription: 'Romanian' }
   'sr': { nativeDescription: 'српски', englishDescription: 'Serbian' }
   'sk': { nativeDescription: 'slovenčina', englishDescription: 'Slovak' }

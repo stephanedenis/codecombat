@@ -16,60 +16,8 @@ Classroom = require '../models/Classroom'
 LevelHandler = class LevelHandler extends Handler
   modelClass: Level
   jsonSchema: require '../../app/schemas/models/level'
-  editableProperties: [
-    'description'
-    'documentation'
-    'background'
-    'nextLevel'
-    'scripts'
-    'thangs'
-    'systems'
-    'victory'
-    'name'
-    'i18n'
-    'icon'
-    'goals'
-    'type'
-    'showsGuide'
-    'banner'
-    'employerDescription'
-    'terrain'
-    'i18nCoverage'
-    'loadingTip'
-    'requiresSubscription'
-    'adventurer'
-    'practice'
-    'adminOnly'
-    'disableSpaces'
-    'hidesSubmitUntilRun'
-    'hidesPlayButton'
-    'hidesRunShortcut'
-    'hidesHUD'
-    'hidesSay'
-    'hidesCodeToolbar'
-    'hidesRealTimePlayback'
-    'backspaceThrottle'
-    'lockDefaultCode'
-    'moveRightLoopSnippet'
-    'realTimeSpeedFactor'
-    'autocompleteFontSizePx'
-    'requiredCode'
-    'suspectCode'
-    'requiredGear'
-    'restrictedGear'
-    'allowedHeroes'
-    'tasks'
-    'helpVideos'
-    'campaign'
-    'campaignIndex'
-    'replayable'
-    'buildTime'
-    'scoreTypes'
-    'concepts'
-    'picoCTFProblem'
-  ]
-
-  postEditableProperties: ['name']
+  editableProperties: Level.editableProperties
+  postEditableProperties: Level.postEditableProperties
 
   getByRelationship: (req, res, args...) ->
     return @getSession(req, res, args[0]) if args[1] is 'session'
@@ -194,7 +142,7 @@ LevelHandler = class LevelHandler extends Handler
           majorVersion: level.version.major
         creator: req.user._id+''
 
-      query = Session.find(sessionQuery).select('-screenshot -transpiledCode')
+      query = Session.find(sessionQuery)
       # TODO: take out "code" as well, since that can get huge containing the transpiled code for the lat hero, and find another way of having the LadderSubmissionViews in the MyMatchesTab determine ranking readiness
       query.exec (err, results) =>
         if err then @sendDatabaseError(res, err) else @sendSuccess res, results

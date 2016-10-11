@@ -5,7 +5,7 @@ useragent = require 'express-useragent'
 fs = require 'graceful-fs'
 log = require 'winston'
 compressible = require 'compressible'
-geoip = require 'geoip-lite'
+geoip = require '@basicer/geoip-lite'
 
 database = require './server/commons/database'
 perfmon = require './server/commons/perfmon'
@@ -52,6 +52,22 @@ developmentLogging = (tokens, req, res) ->
   s += ' (proxied)' if req.proxied
   return s
 
+setupDomainFilterMiddleware = (app) ->
+  if config.isProduction
+    unsafePaths = [
+      /^\/web-dev-iframe\.html$/
+      /^\/javascripts\/web-dev-listener\.js$/
+    ]
+    app.use (req, res, next) ->
+      domainRegex = new RegExp("(.*\.)?(#{config.mainHostname}|#{config.unsafeContentHostname})")
+      domainPrefix = req.host.match(domainRegex)?[1] or ''
+      if _.any(unsafePaths, (pathRegex) -> pathRegex.test(req.path)) and (req.host isnt domainPrefix + config.unsafeContentHostname)
+        res.redirect('//' + domainPrefix + config.unsafeContentHostname + req.path)
+      else if not _.any(unsafePaths, (pathRegex) -> pathRegex.test(req.path)) and req.host is domainPrefix + config.unsafeContentHostname
+        res.redirect('//' + domainPrefix + config.mainHostname + req.path)
+      else
+        next()
+
 setupErrorMiddleware = (app) ->
   app.use (err, req, res, next) ->
     if err
@@ -73,6 +89,8 @@ setupErrorMiddleware = (app) ->
       res.status(err.status ? 500).send(error: "Something went wrong!")
       message = "Express error: #{req.method} #{req.path}: #{err.message}"
       log.error "#{message}, stack: #{err.stack}"
+      if global.testing
+        console.log "#{message}, stack: #{err.stack}"
       slack.sendSlackMessage(message, ['ops'], {papertrail: true})
     else
       next(err)
@@ -84,7 +102,7 @@ setupExpressMiddleware = (app) ->
     app.use express.compress filter: (req, res) ->
       return false if req.headers.host is 'codecombat.com'  # CloudFlare will gzip it for us on codecombat.com
       compressible res.getHeader('Content-Type')
-  else
+  else if not global.testing
     express.logger.format('dev', developmentLogging)
     app.use(express.logger('dev'))
   app.use(express.static(path.join(__dirname, 'public'), maxAge: 0))  # CloudFlare overrides maxAge, and we don't want local development caching.
@@ -110,6 +128,7 @@ setupPassportMiddleware = (app) ->
   auth.setup()
 
 setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", languageCode="zh", host="cn.codecombat.com") ->
+  hosts = host.split /;/g
   shouldRedirectToCountryServer = (req) ->
     speaksLanguage = _.any req.acceptedLanguages, (language) -> language.indexOf languageCode isnt -1
 
@@ -117,9 +136,11 @@ setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", langua
     reqHost = req.hostname
     reqHost ?= req.host
 
-    unless reqHost.toLowerCase() is host
-      ip = req.headers['x-forwarded-for'] or req.connection.remoteAddress
-      ip = ip?.split(/,? /)[0]  # If there are two IP addresses, say because of CloudFlare, we just take the first.
+    return unless reqHost.indexOf(config.unsafeContentHostname) is -1
+
+    if hosts.indexOf(reqHost.toLowerCase()) is -1
+      ip = req.headers['x-forwarded-for'] or req.ip or req.connection.remoteAddress
+      ip = ip?.split(/,? /)[0] if ip? # If there are two IP addresses, say because of CloudFlare, we just take the first.
       geo = geoip.lookup(ip)
       #if speaksLanguage or geo?.country is countryCode
       #  log.info("Should we redirect to #{serverID} server? speaksLanguage: #{speaksLanguage}, acceptedLanguages: #{req.acceptedLanguages}, ip: #{ip}, geo: #{geo} -- so redirecting? #{geo?.country is 'CN' and speaksLanguage}")
@@ -131,7 +152,7 @@ setupCountryRedirectMiddleware = (app, country="china", countryCode="CN", langua
 
   app.use (req, res, next) ->
     if shouldRedirectToCountryServer req
-      res.writeHead 302, "Location": 'http://' + host + req.url
+      res.writeHead 302, "Location": 'http://' + hosts[0] + req.url
       res.end()
     else
       next()
@@ -147,7 +168,11 @@ setupMiddlewareToSendOldBrowserWarningWhenPlayersViewLevelDirectly = (app) ->
     return true if ua.isiPad or ua.isiPod or ua.isiPhone or ua.isOpera
     return false unless ua and ua.Browser in ['Chrome', 'Safari', 'Firefox', 'IE'] and ua.Version
     b = ua.Browser
-    v = parseInt ua.Version.split('.')[0], 10
+    try
+      v = parseInt ua.Version.split('.')[0], 10
+    catch TypeError
+      log.error('ua.Version does not have a split function.', JSON.stringify(ua, null, '  '))
+      return false
     return true if b is 'Chrome' and v < 17
     return true if b is 'Safari' and v < 6
     return true if b is 'Firefox' and v < 21
@@ -164,11 +189,23 @@ setupRedirectMiddleware = (app) ->
     nameOrID = req.path.split('/')[3]
     res.redirect 301, "/user/#{nameOrID}/profile"
 
+setupSecureMiddleware = (app) ->
+  # Cannot use express request `secure` property in production, due to
+  # cluster setup.
+  isSecure = ->
+    return @secure or @headers['x-forwarded-proto'] is 'https'
+
+  app.use (req, res, next) ->
+    req.isSecure = isSecure
+    next()
+    
 setupPerfMonMiddleware = (app) ->
   app.use perfmon.middleware
 
 exports.setupMiddleware = (app) ->
+  setupSecureMiddleware app
   setupPerfMonMiddleware app
+  setupDomainFilterMiddleware app
   setupCountryRedirectMiddleware app, "china", "CN", "zh", config.chinaDomain
   setupCountryRedirectMiddleware app, "brazil", "BR", "pt-BR", config.brazilDomain
   setupMiddlewareToSendOldBrowserWarningWhenPlayersViewLevelDirectly app
@@ -176,10 +213,24 @@ exports.setupMiddleware = (app) ->
   setupPassportMiddleware app
   setupOneSecondDelayMiddleware app
   setupRedirectMiddleware app
+  setupAjaxCaching app
   setupErrorMiddleware app
   setupJavascript404s app
 
 ###Routing function implementations###
+
+setupAjaxCaching = (app) ->
+  # IE/Edge are more aggresive about caching than other browsers, so we'll override their caching here.
+  # Assumes our CDN will override these with it's own caching rules.
+  app.get '/db/*', (req, res, next) ->
+    return next() unless req.xhr
+    # http://stackoverflow.com/questions/19999388/check-if-user-is-using-ie-with-jquery
+    userAgent = req.header('User-Agent') or ""
+    if userAgent.indexOf('MSIE ') > 0 or !!userAgent.match(/Trident.*rv\:11\.|Edge\/\d+/)
+      res.header 'Cache-Control', 'no-cache, no-store, must-revalidate'
+      res.header 'Pragma', 'no-cache'
+      res.header 'Expires', 0
+    next()
 
 setupJavascript404s = (app) ->
   app.get '/javascripts/*', (req, res) ->
@@ -200,6 +251,9 @@ setupFallbackRouteToIndex = (app) ->
           configData =  _.omit mandate?.toObject() or {}, '_id'
         configData.picoCTF = config.picoCTF
         configData.production = config.isProduction
+        domainRegex = new RegExp("(.*\.)?(#{config.mainHostname}|#{config.unsafeContentHostname})")
+        domainPrefix = req.host.match(domainRegex)?[1] or ''
+        configData.fullUnsafeContentHostname = domainPrefix + config.unsafeContentHostname
         data = data.replace '"serverConfigTag"', JSON.stringify configData
         data = data.replace('"userObjectTag"', user)
         data = data.replace('"amActuallyTag"', JSON.stringify(req.session.amActually))

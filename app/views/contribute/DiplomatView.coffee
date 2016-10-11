@@ -23,6 +23,7 @@ require("locale/pt-PT")
 require("locale/pl")
 require("locale/it")
 require("locale/tr")
+require("locale/nl")
 require("locale/nl-BE")
 require("locale/nl-NL")
 require("locale/fa")
@@ -56,11 +57,16 @@ require("locale/eo")
 require("locale/uz")
 require("locale/my")
 require("locale/et")
+require("locale/hr")
+require("locale/mi")
+require("locale/haw")
 
 module.exports = class DiplomatView extends ContributeClassView
   id: 'diplomat-view'
   template: template
-  contributorClassName: 'diplomat'
+
+  initialize: ->
+    @contributorClassName = 'diplomat'
 
   calculateSpokenLanguageStats: ->
     @locale ?= require 'locale/locale'
@@ -94,7 +100,7 @@ module.exports = class DiplomatView extends ContributeClassView
     'es-419': ['2xG', 'Federico Tomas', 'Jesús Ruppel', 'Mariano Luzza', 'Matthew Burt']       # español (América Latina), Spanish (Latin America)
     'es-ES': ['3rr3s3v3n', 'Anon', 'DanielRodriguezRivero', 'Matthew Burt', 'OviiiOne', 'Pouyio', 'Vindurrin']        # español (ES), Spanish (Spain)
     'zh-HANS': ['1c7', 'Adam23', 'BonnieBBS', 'Cheng Zheng', 'Vic020', 'ZephyrSails', 'julycoolwind', 'onion7878', 'spacepope', 'yangxuan8282', 'yfdyh000']      # 简体中文, Chinese (Simplified)
-    'zh-HANT': ['Adam23', 'gintau']      # 繁體中文, Chinese (Traditional)
+    'zh-HANT': ['Adam23', 'gintau', 'shuwn']      # 繁體中文, Chinese (Traditional)
     'zh-WUU-HANS': []  # 吴语, Wuu (Simplified)
     'zh-WUU-HANT': ['benojan']  # 吳語, Wuu (Traditional)
     fr: ['Anon', 'Armaldio', 'ChrisLightman', 'Elfisen', 'Feugy', 'MartinDelille', 'Oaugereau', 'Xeonarno', 'dc55028', 'jaybi', 'pstweb', 'veritable', 'xavismeh']             # français, French
@@ -105,6 +111,7 @@ module.exports = class DiplomatView extends ContributeClassView
     pl: ['Anon', 'Kacper Ciepielewski', 'TigroTigro', 'kvasnyk']             # język polski, Polish
     it: ['AlessioPaternoster', 'flauta', 'Atomk']              # italiano, Italian
     tr: ['Nazım Gediz Aydındoğmuş', 'cobaimelan', 'gediz', 'ilisyus', 'wakeup']             # Türkçe, Turkish
+    nl: []        # Nederlands, Dutch
     'nl-BE': ['Glen De Cauwsemaecker', 'Ruben Vereecken']        # Nederlands (België), Dutch (Belgium)
     'nl-NL': ['Guido Zuidhof', "Jasper D\'haene"]        # Nederlands (Nederland), Dutch (Netherlands)
     fa: ['Reza Habibi (Rehb)']             # فارسی, Persian
@@ -114,7 +121,7 @@ module.exports = class DiplomatView extends ContributeClassView
     el: ['Stergios', 'micman', 'zsdregas']             # ελληνικά, Greek
     ro: []             # limba română, Romanian
     vi: ['An Nguyen Hoang Thien']             # Tiếng Việt, Vietnamese
-    hu: ['Anon', 'atlantisguru', 'bbeasmile', 'csuvsaregal', 'divaDseidnA', 'ferpeter', 'kinez']             # magyar, Hungarian
+    hu: ['Anon', 'atlantisguru', 'bbeasmile', 'csuvsaregal', 'divaDseidnA', 'ferpeter', 'kinez', 'adamcsillag', 'LogMeIn', 'espell.com']             # magyar, Hungarian
     th: ['Kamolchanok Jittrepit']             # ไทย, Thai
     da: ['Anon', 'Einar Rasmussen', 'Rahazan', 'Randi Hillerøe', 'Silwing', 'marc-portier', 'sorsjen', 'Zleep-Dogg']             # dansk, Danish
     ko: ['Melondonut']             # 한국어, Korean
@@ -138,3 +145,6 @@ module.exports = class DiplomatView extends ContributeClassView
     uz: []             # O'zbekcha, Uzbek
     my: []             # မြန်မာစကား, Myanmar language
     et: []             # Eesti, Estonian
+    hr: []             # hrvatski jezik, Croatian
+    mi: []             # te reo Māori, Māori
+    haw: []            # ʻŌlelo Hawaiʻi, Hawaiian

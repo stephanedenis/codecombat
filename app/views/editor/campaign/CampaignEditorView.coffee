@@ -60,6 +60,14 @@ module.exports = class CampaignEditorView extends RootView
     @listenToOnce @levels, 'sync', @onFundamentalLoaded
     @listenToOnce @achievements, 'sync', @onFundamentalLoaded
 
+  onLeaveMessage: ->
+    @propagateCampaignIndexes()
+    for model in @toSave.models
+      diff = model.getDelta()
+      if _.size(diff)
+        console.log 'model, diff', model, diff
+        return 'You have changes!'
+
   loadThangTypeNames: ->
     # Load the names of the ThangTypes that this level's Treema nodes might want to display.
     originals = []
@@ -127,8 +135,9 @@ module.exports = class CampaignEditorView extends RootView
             rewards.push rewardObject
       campaignLevel.rewards = rewards
       delete campaignLevel.unlocks
-      # Save campaign to level, unless it's a course campaign, since we reuse hero levels for course levels.
-      campaignLevel.campaign = @campaign.get 'slug' if @campaign.get('type', true) isnt 'course'
+      # Save campaign to level if it's a main 'hero' campaign so HeroVictoryModal knows where to return.
+      # (Not if it's a defaulted, typeless campaign like game-dev-hoc or auditions.)
+      campaignLevel.campaign = @campaign.get 'slug' if @campaign.get('type') is 'hero'
       # Save campaign index to level if it's a course campaign, since we show linear level order numbers for course levels.
       campaignLevel.campaignIndex = (@levels.models.length - levelIndex - 1) if @campaign.get('type', true) is 'course'
       campaignLevels[levelOriginal] = campaignLevel
@@ -143,6 +152,18 @@ module.exports = class CampaignEditorView extends RootView
       @updateRewardsForLevel model, level.rewards
 
     super()
+
+  propagateCampaignIndexes: ->
+    campaignLevels = $.extend({}, @campaign.get('levels'))
+    index = 0
+    for levelOriginal, campaignLevel of campaignLevels
+      if @campaign.get('type') is 'course'
+        level = @levels.findWhere({original: levelOriginal})
+        if level and level.get('campaignIndex') isnt index
+          level.set('campaignIndex', index)
+      campaignLevel.campaignIndex = index
+      index += 1
+      @campaign.set('levels', campaignLevels)
 
   onClickPatches: (e) ->
     @patchesView = @insertSubView(new PatchesView(@campaign), @$el.find('.patches-view'))
@@ -160,6 +181,7 @@ module.exports = class CampaignEditorView extends RootView
           break
 
   onClickSaveButton: ->
+    @propagateCampaignIndexes()
     @toSave.set @toSave.filter (m) -> m.hasLocalChanges()
     @openModalView new SaveCampaignModal({}, @toSave)
 
@@ -217,6 +239,14 @@ module.exports = class CampaignEditorView extends RootView
     @toSave.add @campaign
     @campaign.set key, value for key, value of @treema.data
     @campaignView.setCampaign(@campaign)
+
+  onTreemaSelectionChanged: (e, node) =>
+    return unless node[0]?.data?.original?
+    elem = @$("div[data-level-original='#{node[0].data.original}']")
+    elem.toggle('pulsate')
+    setTimeout ()->
+      elem.toggle('pulsate')
+    , 1000
 
   onTreemaDoubleClicked: (e, node) =>
     path = node.getPath()

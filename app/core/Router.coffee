@@ -1,5 +1,5 @@
 go = (path, options) -> -> @routeDirectly path, arguments, options
-redirect = (path) -> -> @navigate(path, { trigger: true, replace: true })
+redirect = (path) -> -> @navigate(path + document.location.search, { trigger: true, replace: true })
 utils = require './utils'
 
 module.exports = class CocoRouter extends Backbone.Router
@@ -15,8 +15,8 @@ module.exports = class CocoRouter extends Backbone.Router
       if window.serverConfig.picoCTF
         return @routeDirectly 'play/CampaignView', ['picoctf'], {}
       if utils.getQueryVariable 'hour_of_code'
-        return @navigate "/play", {trigger: true, replace: true}
-      return @routeDirectly('NewHomeView', [])
+        return @navigate "/play?hour_of_code=true", {trigger: true, replace: true}
+      return @routeDirectly('HomeView', [])
 
     'about': go('AboutView')
 
@@ -30,19 +30,30 @@ module.exports = class CocoRouter extends Backbone.Router
 
     'admin': go('admin/MainAdminView')
     'admin/clas': go('admin/CLAsView')
+    'admin/classroom-content': go('admin/AdminClassroomContentView')
+    'admin/classroom-levels': go('admin/AdminClassroomLevelsView')
     'admin/design-elements': go('admin/DesignElementsView')
     'admin/files': go('admin/FilesView')
     'admin/analytics': go('admin/AnalyticsView')
     'admin/analytics/subscriptions': go('admin/AnalyticsSubscriptionsView')
     'admin/level-sessions': go('admin/LevelSessionsView')
+    'admin/school-counts': go('admin/SchoolCountsView')
+    'admin/school-licenses': go('admin/SchoolLicensesView')
     'admin/users': go('admin/UsersView')
     'admin/base': go('admin/BaseView')
+    'admin/demo-requests': go('admin/DemoRequestsView')
     'admin/trial-requests': go('admin/TrialRequestsView')
     'admin/user-code-problems': go('admin/UserCodeProblemsView')
     'admin/pending-patches': go('admin/PendingPatchesView')
     'admin/codelogs': go('admin/CodeLogsView')
 
-    'beta': go('HomeView')
+    'artisans': go('artisans/ArtisansView')
+
+    'artisans/level-tasks': go('artisans/LevelTasksView')
+    'artisans/solution-problems': go('artisans/SolutionProblemsView')
+    'artisans/thang-tasks': go('artisans/ThangTasksView')
+    'artisans/level-concepts': go('artisans/LevelConceptMap')
+    'artisans/level-guides': go('artisans/LevelGuidesView')
 
     'careers': => window.location.href = 'https://jobs.lever.co/codecombat'
     'Careers': => window.location.href = 'https://jobs.lever.co/codecombat'
@@ -62,14 +73,15 @@ module.exports = class CocoRouter extends Backbone.Router
     'contribute/diplomat': go('contribute/DiplomatView')
     'contribute/scribe': go('contribute/ScribeView')
 
-    'courses': go('courses/CoursesView') # , { studentsOnly: true }) # TODO: Enforce after session-less play for teachers
-    'Courses': go('courses/CoursesView') # , { studentsOnly: true })
-    'courses/students': redirect('/courses')
+    'courses': redirect('/students') # Redirected 9/3/16
+    'Courses': redirect('/students') # Redirected 9/3/16
+    'courses/students': redirect('/students') # Redirected 9/3/16
     'courses/teachers': redirect('/teachers/classes')
-    'courses/purchase': redirect('/teachers/enrollments')
-    'courses/enroll(/:courseID)': redirect('/teachers/enrollments')
-    'courses/:classroomID': go('courses/ClassroomView') #, { studentsOnly: true })
-    'courses/:courseID/:courseInstanceID': go('courses/CourseDetailsView')
+    'courses/purchase': redirect('/teachers/licenses')
+    'courses/enroll(/:courseID)': redirect('/teachers/licenses')
+    'courses/update-account': redirect('students/update-account') # Redirected 9/3/16
+    'courses/:classroomID': -> @navigate("/students/#{arguments[0]}", {trigger: true, replace: true}) # Redirected 9/3/16
+    'courses/:courseID/:courseInstanceID': -> @navigate("/students/#{arguments[0]}/#{arguments[1]}", {trigger: true, replace: true}) # Redirected 9/3/16
 
     'db/*path': 'routeToServer'
     'demo(/*subpath)': go('DemoView')
@@ -93,13 +105,15 @@ module.exports = class CocoRouter extends Backbone.Router
     'editor/thang-tasks': go('editor/ThangTasksView')
     'editor/verifier': go('editor/verifier/VerifierView')
     'editor/verifier/:levelID': go('editor/verifier/VerifierView')
+    'editor/course': go('editor/course/CourseSearchView')
+    'editor/course/:courseID': go('editor/course/CourseEditView')
 
     'file/*path': 'routeToServer'
 
     'github/*path': 'routeToServer'
 
-    'hoc': go('courses/HourOfCodeView')
-    'home': go('NewHomeView')
+    'hoc': -> @navigate "/play?hour_of_code=true", {trigger: true, replace: true}
+    'home': go('HomeView')
 
     'i18n': go('i18n/I18NHomeView')
     'i18n/thang/:handle': go('i18n/I18NEditThangTypeView')
@@ -108,18 +122,20 @@ module.exports = class CocoRouter extends Backbone.Router
     'i18n/achievement/:handle': go('i18n/I18NEditAchievementView')
     'i18n/campaign/:handle': go('i18n/I18NEditCampaignView')
     'i18n/poll/:handle': go('i18n/I18NEditPollView')
+    'i18n/course/:handle': go('i18n/I18NEditCourseView')
 
     'identify': go('user/IdentifyView')
+    'il-signup': go('account/IsraelSignupView')
 
     'legal': go('LegalView')
-
-    'multiplayer': go('MultiplayerView')
 
     'play(/)': go('play/CampaignView') # extra slash is to get Facebook app to work
     'play/ladder/:levelID/:leagueType/:leagueID': go('ladder/LadderView')
     'play/ladder/:levelID': go('ladder/LadderView')
     'play/ladder': go('ladder/MainLadderView')
     'play/level/:levelID': go('play/level/PlayLevelView')
+    'play/game-dev-level/:levelID/:sessionID': go('play/level/PlayGameDevLevelView')
+    'play/web-dev-level/:levelID/:sessionID': go('play/level/PlayWebDevLevelView')
     'play/spectate/:levelID': go('play/SpectateView')
     'play/:map': go('play/CampaignView')
 
@@ -127,26 +143,40 @@ module.exports = class CocoRouter extends Backbone.Router
 
     'privacy': go('PrivacyView')
 
-    'schools': go('NewHomeView')
+    'schools': go('HomeView')
+    'seen': go('HomeView')
+    'SEEN': go('HomeView')
 
+    'students': go('courses/CoursesView', { redirectTeachers: true })
+    'students/update-account': go('courses/CoursesUpdateAccountView', { redirectTeachers: true })
+    'students/:classroomID': go('courses/ClassroomView', { redirectTeachers: true, studentsOnly: true })
+    'students/:courseID/:courseInstanceID': go('courses/CourseDetailsView', { redirectTeachers: true, studentsOnly: true })
     'teachers': redirect('/teachers/classes')
-    'teachers/classes': go('courses/TeacherClassesView') #, { teachersOnly: true })
-    'teachers/classes/:classroomID': go('courses/TeacherClassView') #, { teachersOnly: true })
-    'teachers/courses': go('courses/TeacherCoursesView')
-    'teachers/demo': go('teachers/RequestQuoteView')
-    'teachers/enrollments': go('courses/EnrollmentsView') #, { teachersOnly: true })
-    'teachers/freetrial': go('teachers/RequestQuoteView')
-    'teachers/quote': go('teachers/RequestQuoteView')
+    'teachers/classes': go('courses/TeacherClassesView', { redirectStudents: true, teachersOnly: true })
+    'teachers/classes/:classroomID/:studentID': go('teachers/TeacherStudentView', { redirectStudents: true, teachersOnly: true })
+    'teachers/classes/:classroomID': go('courses/TeacherClassView', { redirectStudents: true, teachersOnly: true })
+    'teachers/courses': go('courses/TeacherCoursesView', { redirectStudents: true })
+    'teachers/course-solution/:courseID/:language': go('teachers/TeacherCourseSolutionView', { redirectStudents: true })
+    'teachers/demo': go('teachers/RequestQuoteView', { redirectStudents: true })
+    'teachers/enrollments': redirect('/teachers/licenses')
+    'teachers/licenses': go('courses/EnrollmentsView', { redirectStudents: true, teachersOnly: true })
+    'teachers/freetrial': go('teachers/RequestQuoteView', { redirectStudents: true })
+    'teachers/quote': redirect('/teachers/demo')
+    'teachers/resources': go('teachers/ResourceHubView', { redirectStudents: true })
+    'teachers/resources/:name': go('teachers/MarkdownResourceView', { redirectStudents: true })
     'teachers/signup': ->
       return @routeDirectly('teachers/CreateTeacherAccountView', []) if me.isAnonymous()
+      return @navigate('/students', {trigger: true, replace: true}) if me.isStudent() and not me.isAdmin()
       @navigate('/teachers/update-account', {trigger: true, replace: true})
     'teachers/update-account': ->
       return @navigate('/teachers/signup', {trigger: true, replace: true}) if me.isAnonymous()
+      return @navigate('/students', {trigger: true, replace: true}) if me.isStudent() and not me.isAdmin()
       @routeDirectly('teachers/ConvertToTeacherAccountView', [])
 
     'test(/*subpath)': go('TestView')
 
     'user/:slugOrID': go('user/MainUserView')
+    'user/:userID/verify/:verificationCode': go('user/EmailVerifiedView')
 
     '*name/': 'removeTrailingSlash'
     '*name': go('NotFoundView')
@@ -158,9 +188,13 @@ module.exports = class CocoRouter extends Backbone.Router
     @navigate e, {trigger: true}
 
   routeDirectly: (path, args=[], options={}) ->
-    if options.teachersOnly and not me.isTeacher()
+    if options.redirectStudents and me.isStudent() and not me.isAdmin()
+      return @navigate('/students', {trigger: true, replace: true})
+    if options.redirectTeachers and me.isTeacher() and not me.isAdmin()
+      return @navigate('/teachers', {trigger: true, replace: true})
+    if options.teachersOnly and not (me.isTeacher() or me.isAdmin())
       return @routeDirectly('teachers/RestrictedToTeachersView')
-    if options.studentsOnly and me.isTeacher()
+    if options.studentsOnly and not (me.isStudent() or me.isAdmin())
       return @routeDirectly('courses/RestrictedToStudentsView')
     leavingMessage = _.result(window.currentView, 'onLeaveMessage')
     if leavingMessage
@@ -176,7 +210,7 @@ module.exports = class CocoRouter extends Backbone.Router
       @listenToOnce application.moduleLoader, 'load-complete', ->
         @routeDirectly(path, args, options)
       return
-    return @openView @notFoundView() if not ViewClass
+    return go('NotFoundView') if not ViewClass
     view = new ViewClass(options, args...)  # options, then any path fragment args
     view.render()
     @openView(view)

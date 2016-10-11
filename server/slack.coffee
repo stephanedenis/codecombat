@@ -8,8 +8,7 @@ roomChannelMap =
   
 module.exports.sendChangedSlackMessage = (options) ->
   message = "#{options.creator.get('name')} saved a change to #{options.target.get('name')}: #{options.target.get('commitMessage') or '(no commit message)'} #{options.docLink}"
-  rooms = if /Diplomat submission/.test(message) then ['dev-feed'] else ['artisans']
-  @sendSlackMessage message, rooms
+  @sendSlackMessage message, ['artisans']
 
 module.exports.sendSlackMessage = (message, rooms=['tower'], options={}) ->
   unless config.isProduction
@@ -29,7 +28,7 @@ module.exports.sendSlackMessage = (message, rooms=['tower'], options={}) ->
       unfurl_media: false
     if options.papertrail
       secondsFromEpoch = Math.floor(new Date().getTime() / 1000)
-      link = "https://papertrailapp.com/groups/488214/events?time=#{secondsFromEpoch}"
+      link = "https://app.logdna.com/logs/view?t=timestamp:#{secondsFromEpoch}"
       form.text += " #{link}"
     # https://api.slack.com/docs/formatting
     form.text = form.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')

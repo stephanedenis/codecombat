@@ -7,9 +7,9 @@ errors = require 'core/errors'
 User = require 'models/User'
 algolia = require 'core/services/algolia'
 
-FORM_KEY = 'request-quote-form'
 SIGNUP_REDIRECT = '/teachers/classes'
-NCES_KEYS = ['id', 'name', 'district', 'district_id', 'district_schools', 'district_students', 'students', 'phone']
+DISTRICT_NCES_KEYS = ['district', 'district_id', 'district_schools', 'district_students', 'phone']
+SCHOOL_NCES_KEYS = DISTRICT_NCES_KEYS.concat(['id', 'name', 'students'])
 
 module.exports = class CreateTeacherAccountView extends RootView
   id: 'create-teacher-account-view'
@@ -17,8 +17,8 @@ module.exports = class CreateTeacherAccountView extends RootView
 
   events:
     'click .login-link': 'onClickLoginLink'
-    'change form': 'onChangeForm'
-    'submit form': 'onSubmitForm'
+    'change form#signup-form': 'onChangeForm'
+    'submit form#signup-form': 'onSubmitForm'
     'click #gplus-signup-btn': 'onClickGPlusSignupButton'
     'click #facebook-signup-btn': 'onClickFacebookSignupButton'
     'change input[name="city"]': 'invalidateNCES'
@@ -31,6 +31,7 @@ module.exports = class CreateTeacherAccountView extends RootView
     @trialRequests = new TrialRequests()
     @trialRequests.fetchOwn()
     @supermodel.trackCollection(@trialRequests)
+    window.tracker?.trackEvent 'Teachers Create Account Loaded', category: 'Teachers', ['Mixpanel']
 
   onLeaveMessage: ->
     if @formChanged
@@ -39,17 +40,15 @@ module.exports = class CreateTeacherAccountView extends RootView
   onLoaded: ->
     if @trialRequests.size()
       @trialRequest = @trialRequests.first()
-    if @trialRequest and @trialRequest.get('status') isnt 'submitted' and @trialRequest.get('status') isnt 'approved'
-      window.tracker?.trackEvent 'View Trial Request', category: 'Teachers', label: 'View Trial Request', ['Mixpanel']
     super()
 
   invalidateNCES: ->
-    for key in NCES_KEYS
+    for key in SCHOOL_NCES_KEYS
       @$('input[name="nces_' + key + '"]').val ''
-    
+
   afterRender: ->
     super()
-    
+
     # apply existing trial request on form
     properties = @trialRequest.get('properties')
     if properties
@@ -59,7 +58,7 @@ module.exports = class CreateTeacherAccountView extends RootView
       otherLevel = _.first(_.difference(submittedLevels, commonLevels)) or ''
       @$('#other-education-level-checkbox').attr('checked', !!otherLevel)
       @$('#other-education-level-input').val(otherLevel)
-      
+
     $("#organization-control").algolia_autocomplete({hint: false}, [
       source: (query, callback) ->
         algolia.schoolsIndex.search(query, { hitsPerPage: 5, aroundLatLngViaIP: false }).then (answer) ->
@@ -73,16 +72,35 @@ module.exports = class CreateTeacherAccountView extends RootView
           "<div class='school'> #{hr.name.value} </div>" +
             "<div class='district'>#{hr.district.value}, " +
               "<span>#{hr.city?.value}, #{hr.state.value}</span></div>"
-
     ]).on 'autocomplete:selected', (event, suggestion, dataset) =>
+      # Tell Algolioa about the change but don't open the suggestion dropdown
+      @$('input[name="district"]').val(suggestion.district).trigger('input').trigger('blur')
       @$('input[name="city"]').val suggestion.city
       @$('input[name="state"]').val suggestion.state
-      @$('input[name="district"]').val suggestion.district
       @$('input[name="country"]').val 'USA'
-
-      for key in NCES_KEYS
+      for key in SCHOOL_NCES_KEYS
         @$('input[name="nces_' + key + '"]').val suggestion[key]
+      @onChangeForm()
 
+    $("#district-control").algolia_autocomplete({hint: false}, [
+      source: (query, callback) ->
+        algolia.schoolsIndex.search(query, { hitsPerPage: 5, aroundLatLngViaIP: false }).then (answer) ->
+          callback answer.hits
+        , ->
+          callback []
+      displayKey: 'district',
+      templates:
+        suggestion: (suggestion) ->
+          hr = suggestion._highlightResult
+          "<div class='district'>#{hr.district.value}, " +
+            "<span>#{hr.city?.value}, #{hr.state.value}</span></div>"
+    ]).on 'autocomplete:selected', (event, suggestion, dataset) =>
+      @$('input[name="organization"]').val('').trigger('input').trigger('blur')
+      @$('input[name="city"]').val suggestion.city
+      @$('input[name="state"]').val suggestion.state
+      @$('input[name="country"]').val 'USA'
+      for key in DISTRICT_NCES_KEYS
+        @$('input[name="nces_' + key + '"]').val suggestion[key]
       @onChangeForm()
 
   onClickLoginLink: ->
@@ -90,39 +108,50 @@ module.exports = class CreateTeacherAccountView extends RootView
     @openModalView(modal)
 
   onChangeForm: ->
+    unless @formChanged
+      window.tracker?.trackEvent 'Teachers Create Account Form Started', category: 'Teachers', ['Mixpanel']
     @formChanged = true
 
   onSubmitForm: (e) ->
     e.preventDefault()
-    
+
     # Creating Trial Request first, validate user attributes but do not use them
     form = @$('form')
     allAttrs = forms.formToObject(form)
     trialRequestAttrs = _.omit(allAttrs, 'name', 'password1', 'password2')
-    
+
+    # Don't save n/a district entries, but do validate required district client-side
+    trialRequestAttrs = _.omit(trialRequestAttrs, 'district') if trialRequestAttrs.district?.replace(/\s/ig, '').match(/n\/a/ig)
+
     if @$('#other-education-level-checkbox').is(':checked')
       val = @$('#other-education-level-input').val()
       trialRequestAttrs.educationLevel.push(val) if val
-      
+
     forms.clearFormAlerts(form)
-    
+
     result = tv4.validateMultiple(trialRequestAttrs, formSchema)
     error = false
     if not result.valid
       forms.applyErrorsToForm(form, result.errors)
       error = true
-    if not forms.validateEmail(trialRequestAttrs.email)
-      forms.setErrorToProperty(form, 'email', 'Invalid email.')
+    if not error and not forms.validateEmail(trialRequestAttrs.email)
+      forms.setErrorToProperty(form, 'email', 'invalid email')
+      error = true
+    if not error and forms.validateEmail(allAttrs.name)
+      forms.setErrorToProperty(form, 'name', 'username may not be an email')
       error = true
     if not _.size(trialRequestAttrs.educationLevel)
-      forms.setErrorToProperty(form, 'educationLevel', 'Include at least one.')
+      forms.setErrorToProperty(form, 'educationLevel', 'include at least one')
+      error = true
+    unless allAttrs.district
+      forms.setErrorToProperty(form, 'district', $.i18n.t('common.required_field'))
       error = true
     unless @gplusAttrs or @facebookAttrs
       if not allAttrs.password1
-        forms.setErrorToProperty(form, 'password1', 'Required field')
+        forms.setErrorToProperty(form, 'password1', $.i18n.t('common.required_field'))
         error = true
       else if not allAttrs.password2
-        forms.setErrorToProperty(form, 'password2', 'Required field')
+        forms.setErrorToProperty(form, 'password2', $.i18n.t('common.required_field'))
         error = true
       else if allAttrs.password1 isnt allAttrs.password2
         forms.setErrorToProperty(form, 'password1', 'Password fields are not equivalent')
@@ -150,7 +179,7 @@ module.exports = class CreateTeacherAccountView extends RootView
         .addClass('has-error')
         .append($("<div class='help-block error-help-block'>#{userExists} <a class='login-link'>#{logIn}</a>"))
       forms.scrollToFirstError()
-    else 
+    else
       errors.showNotyNetworkError(arguments...)
 
   onClickEmailExistsLoginLink: ->
@@ -158,28 +187,56 @@ module.exports = class CreateTeacherAccountView extends RootView
     @openModalView(modal)
 
   onTrialRequestSubmit: ->
+    window.tracker?.trackEvent 'Teachers Create Account Submitted', category: 'Teachers', ['Mixpanel']
     @formChanged = false
-    attrs = _.pick(forms.formToObject(@$('form')), 'name', 'email', 'role')
-    attrs.role = attrs.role.toLowerCase()
-    options = {}
-    newUser = new User(attrs)
-    if @gplusAttrs
-      newUser.set('_id', me.id)
-      options.url = "/db/user?gplusID=#{@gplusAttrs.gplusID}&gplusAccessToken=#{application.gplusHandler.accessToken.access_token}"
-      options.type = 'PUT'
-      newUser.set(@gplusAttrs)
-    else if @facebookAttrs
-      newUser.set('_id', me.id)
-      options.url = "/db/user?facebookID=#{@facebookAttrs.facebookID}&facebookAccessToken=#{application.facebookHandler.authResponse.accessToken}"
-      options.type = 'PUT'
-      newUser.set(@facebookAttrs)
-    else
-      newUser.set('password', @$('input[name="password1"]').val())
-    newUser.save(null, options)
-    newUser.once 'sync', ->
+    
+    Promise.resolve()
+    .then =>
+      attrs = _.pick(forms.formToObject(@$('form')), 'role', 'firstName', 'lastName')
+      attrs.role = attrs.role.toLowerCase()
+      me.set(attrs)
+      me.set(_.omit(@gplusAttrs, 'gplusID', 'email')) if @gplusAttrs
+      me.set(_.omit(@facebookAttrs, 'facebookID', 'email')) if @facebookAttrs
+      jqxhr = me.save()
+      if not jqxhr
+        throw new Error('Could not save user')
+      @trigger 'update-settings'
+      return jqxhr
+      
+    .then =>
+      { name, email } = forms.formToObject(@$('form'))
+      if @gplusAttrs
+        { email, gplusID } = @gplusAttrs
+        { name } = forms.formToObject(@$el)
+        jqxhr = me.signupWithGPlus(name, email, @gplusAttrs.gplusID)
+      else if @facebookAttrs
+        { email, facebookID } = @facebookAttrs
+        { name } = forms.formToObject(@$el)
+        jqxhr = me.signupWithFacebook(name, email, facebookID)
+      else
+        { name, email, password1 } = forms.formToObject(@$el)
+        jqxhr = me.signupWithPassword(name, email, password1)
+      @trigger 'signup'
+      return jqxhr
+      
+    .then =>
       application.router.navigate(SIGNUP_REDIRECT, { trigger: true })
       application.router.reload()
-    newUser.once 'error', errors.showNotyNetworkError
+
+    .catch (e) =>
+      if e instanceof Error
+        noty {
+          text: e.message
+          layout: 'topCenter'
+          type: 'error'
+          timeout: 5000
+          killer: false,
+          dismissQueue: true
+        }
+      else
+        errors.showNotyNetworkError(arguments...)
+      @$('#create-account-btn').text('Submit').attr('disabled', false)
+    
 
   # GPlus signup
 
@@ -223,7 +280,6 @@ module.exports = class CreateTeacherAccountView extends RootView
     @$('input[type="password"]').attr('disabled', true)
     @$('#gplus-logged-in-row, #social-network-signups').toggleClass('hide')
 
-  
   # Facebook signup
 
   onClickFacebookSignupButton: ->
@@ -267,13 +323,9 @@ module.exports = class CreateTeacherAccountView extends RootView
     @$('#facebook-logged-in-row, #social-network-signups').toggleClass('hide')
 
 
-
 formSchema = {
   type: 'object'
-  required: [
-    'firstName', 'lastName', 'email', 'organization', 'role', 'numStudents', 'city'
-    'state', 'country'
-  ]
+  required: ['firstName', 'lastName', 'email', 'role', 'numStudents', 'city', 'state', 'country']
   properties:
     password1: { type: 'string' }
     password2: { type: 'string' }
@@ -284,6 +336,7 @@ formSchema = {
     phoneNumber: { type: 'string' }
     role: { type: 'string' }
     organization: { type: 'string' }
+    district: { type: 'string' }
     city: { type: 'string' }
     state: { type: 'string' }
     country: { type: 'string' }
@@ -296,5 +349,5 @@ formSchema = {
     notes: { type: 'string' }
 }
 
-for key in NCES_KEYS
+for key in SCHOOL_NCES_KEYS
   formSchema['nces_' + key] = type: 'string'

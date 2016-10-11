@@ -37,8 +37,6 @@ _.extend LevelSessionSchema.properties,
     type: 'string'
   levelID:
     type: 'string'
-  multiplayer:
-    type: 'boolean'
   creator: c.objectId
     links:
       [
@@ -54,16 +52,13 @@ _.extend LevelSessionSchema.properties,
   changed: c.date
     title: 'Changed'
     readOnly: true
-  
+
   dateFirstCompleted: {} # c.stringDate
 #    title: 'Completed'
 #    readOnly: true
 
   team: c.shortString()
   level: LevelSessionLevelSchema
-
-  screenshot:
-    type: 'string'
 
   heroConfig: c.HeroConfigSchema
 
@@ -163,7 +158,7 @@ _.extend LevelSessionSchema.properties,
   playtime:
     type: 'number'
     title: 'Playtime'
-    description: 'The total playtime on this session'
+    description: 'The total playtime on this session in seconds'
 
   teamSpells:
     type: 'object'
@@ -207,14 +202,6 @@ _.extend LevelSessionSchema.properties,
 
   submittedCodeLanguage:
     type: 'string'
-
-  transpiledCode:
-    type: 'object'
-    additionalProperties:
-      type: 'object'
-      additionalProperties:
-        type: 'string'
-        format: 'code'
 
   isRanking:
     type: 'boolean'

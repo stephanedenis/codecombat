@@ -10,19 +10,33 @@ block content
       .col-sm-1
         button.btn.btn-primary.btn-large#enter-espionage-mode 007
       label.control-label.col-sm-5(for="espionage-name-or-email")
-        em you are currently #{me.get('name')} at #{me.get('email')}
+        em you are currently #{me.get('name') || '(no username)'} at #{me.get('email') || '(no email)'}
         if view.amActually
           br
-          em but you are actually #{view.amActually.get('name')} at #{view.amActually.get('email')}
+          em but you are actually #{view.amActually.get('name') || '(no username)'} at #{view.amActually.get('email') || '(no email)'}
           br
           button#stop-spying-btn.btn.btn-xs Stop Spying
     form#user-search-form.form-group
       label.control-label.col-sm-2(for="user-search") User Search
       .col-sm-4
         input.form-control#user-search(placeholder="Email, username, name, whatever", type="text")
+        a.search-help-toggle(href="#") (search help)
+        .search-help
+          strong Note: 
+          | Search information is updated every 10-15min.
+          h4 Search Syntax
+          ul
+            li By default parts of the search are matched exactly.
+            li <code>*</code> can be used as a wildcard character (ex. '<code>rob*@gmail.com</code>')
+            li Avoid special charaters and puncuation.  Consider replacing them with <code>*</code> in searches.
+            li
+              a(href='http://sphinxsearch.com/docs/latest/extended-syntax.html') Complete Syntax Guide
       .col-sm-1
         button.btn.btn-primary.btn-large#user-search-button  Search
   #user-search-result
+
+
+
 
 
   h3 Admin Views
@@ -31,16 +45,34 @@ block content
 
   ul
     li
-      a(href="/admin/level-sessions") Active Instances
-    li
       a(href="/admin/trial-requests") Trial Requests
     li
       a(href="/admin/user-code-problems") User Code Problems List
     li
       a(href="/admin/users") Users
 
-  h4 Other
+  if me.isAdmin()
+    h4 Analytics
+    ul
+      li
+        a(href="/admin/classroom-content") Classroom Content
+      li
+        a(href="/admin/classroom-levels") Classroom Levels
+      li
+        button.classroom-progress-csv.btn.btn-sm.btn-success Classroom Progress CSV
+        input.classroom-progress-class-code(type=text placeholder="<class code>")
+      li
+        a(href="/admin/analytics") Dashboard
+      li
+        a(href="/admin/school-licenses") School Active Licenses
+      li
+        a(href="/admin/school-counts") School Counts
+      li
+        a(href="/admin/analytics/subscriptions") Subscriptions
+      li
+        a(href="/admin/demo-requests") Teacher Demo Requests 
 
+  h4 Other
   ul
     li
       a(href="/admin/base") Base (for debugging base.jade)
@@ -48,15 +80,7 @@ block content
       a(href="/admin/clas") CLAs
     li
       a(href="/admin/pending-patches") Patches
-    if me.isAdmin()
-      li
-        a(href="/admin/analytics") Analytics
-        ul
-          li
-            a(href="/admin/analytics/subscriptions") Subscriptions
-    li
-      a(href="/admin/design-elements") Design Elements
-
+      
   if me.isAdmin()
     hr
     h3 Prepaids

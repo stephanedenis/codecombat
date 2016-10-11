@@ -11,6 +11,8 @@ mongoose = require 'mongoose'
 authentication = require 'passport'
 sendwithus = require '../sendwithus'
 LevelSession = require '../models/LevelSession'
+config = require '../../server_config'
+oauth = require '../lib/oauth'
 
 module.exports =
   checkDocumentPermissions: (req, res, next) ->
@@ -62,6 +64,11 @@ module.exports =
     yield req.user.update {activity: activity}
     res.status(200).send(req.user.toObject({req: req}))
 
+  redirectHome: wrap (req, res, next) ->
+    activity = req.user.trackActivity 'login', 1
+    yield req.user.update {activity: activity}
+    res.redirect '/'
+
   loginByGPlus: wrap (req, res, next) ->
     gpID = req.body.gplusID
     gpAT = req.body.gplusAccessToken
@@ -73,6 +80,73 @@ module.exports =
     throw new errors.UnprocessableEntity('Invalid G+ Access Token.') unless idsMatch
     user = yield User.findOne({gplusID: gpID})
     throw new errors.NotFound('No user with that G+ ID') unless user
+    req.logInAsync = Promise.promisify(req.logIn)
+    yield req.logInAsync(user)
+    next()
+
+  loginByClever: wrap (req, res, next) ->
+    throw new errors.UnprocessableEntity('Clever integration not configured.') unless config.clever.client_id and config.clever.client_secret
+
+    code = req.query.code
+    scope = req.query.scope
+    throw new errors.UnprocessableEntity('code and scope required.') unless code and scope
+
+
+    [cleverRes, auth] = yield request.postAsync
+      json: true
+      url: "https://clever.com/oauth/tokens"
+      form:
+        code: code
+        grant_type: 'authorization_code'
+        redirect_uri: config.clever.redirect_uri
+
+      auth:
+        user: config.clever.client_id
+        password: config.clever.client_secret
+        sendImmediately: true
+
+    
+    throw new errors.UnprocessableEntity('Invalid Clever OAuth Code.') unless auth.access_token
+
+    [re2, userInfo] = yield request.getAsync
+      json : true
+      url: 'https://api.clever.com/me'
+      auth:
+        bearer: auth.access_token
+
+    [lookupRes, lookup] = yield request.getAsync
+        url: "https://api.clever.com/v1.1/#{userInfo.data.type}s/#{userInfo.data.id}"
+        json: true
+        auth:
+          bearer: auth.access_token
+
+    unless lookupRes.statusCode is 200
+      throw new errors.Forbidden("Couldn't look up user.  Is data sharing enabled in clever?")
+
+    
+    user = yield User.findOne({cleverID: userInfo.data.id})
+    unless user
+      user = new User
+        anonymous: false
+        role: if userInfo.data.type is 'student' then 'student' else 'teacher'
+        cleverID: userInfo.data.id
+        emailVerified: true
+        email: lookup.data.email
+
+      user.set 'testGroupNumber', Math.floor(Math.random() * 256)  # also in app/core/auth
+
+
+    if lookup.data.name
+      user.set 'firstName', lookup.data.name.first
+      user.set 'lastName', lookup.data.name.last
+
+    yield user.save()
+
+    #console.log JSON.stringify
+    #  userInfo: userInfo
+    #  lookup: lookup
+    #,null,'  '
+
     req.logInAsync = Promise.promisify(req.logIn)
     yield req.logInAsync(user)
     next()
@@ -92,18 +166,28 @@ module.exports =
     yield req.logInAsync(user)
     next()
     
+  loginByOAuthProvider: wrap (req, res) ->
+    { provider: providerId, accessToken, code } = req.query
+    identity = yield oauth.getIdentityFromOAuth({providerId, accessToken, code})
+    
+    user = yield User.findOne({oAuthIdentities: { $elemMatch: identity }})
+    if not user
+      throw new errors.NotFound('No user with this identity exists')
+    
+    req.loginAsync = Promise.promisify(req.login)
+    yield req.loginAsync user
+    
+    activity = req.user.trackActivity 'login', 1
+    yield req.user.update {activity: activity}
+    res.redirect '/'
+    
   spy: wrap (req, res) ->
     throw new errors.Unauthorized('You must be logged in to enter espionage mode') unless req.user
     throw new errors.Forbidden('You must be an admin to enter espionage mode') unless req.user.isAdmin()
     
     user = req.body.user
     throw new errors.UnprocessableEntity('Specify an id, username or email to espionage.') unless user
-    if utils.isID(user)
-      query = {_id: mongoose.Types.ObjectId(user)}
-    else
-      user = user.toLowerCase()
-      query = $or: [{nameLower: user}, {emailLower: user}]
-    user = yield User.findOne(query)
+    user = yield User.search(user)
     amActually = req.user
     throw new errors.NotFound() unless user
     req.loginAsync = Promise.promisify(req.login)
@@ -147,7 +231,16 @@ module.exports =
     res.end()
     
   unsubscribe: wrap (req, res) ->
-    email = req.query.email
+    # need to grab email directly from url, in case it has "+" in it
+    queryString = req.url.split('?')[1] or ''
+    queryParts = queryString.split('&')
+    email = null
+    for part in queryParts
+      [name, value] = part.split('=')
+      if name is 'email'
+        email = value
+        break
+    
     unless email
       throw new errors.UnprocessableEntity 'No email provided to unsubscribe.'
     email = decodeURIComponent(email)
@@ -193,12 +286,21 @@ module.exports =
   name: wrap (req, res) ->
     if not req.params.name
       throw new errors.UnprocessableEntity 'No name provided.'
-    originalName = req.params.name
+    givenName = req.params.name
       
     User.unconflictNameAsync = Promise.promisify(User.unconflictName)
-    name = yield User.unconflictNameAsync originalName
-    response = name: name
-    if originalName is name
-      res.send 200, response
-    else
-      throw new errors.Conflict('Name is taken', response)
+    suggestedName = yield User.unconflictNameAsync givenName
+    response = {
+      givenName
+      suggestedName
+      conflicts: givenName isnt suggestedName
+    }
+    res.send 200, response
+
+  email: wrap (req, res) ->
+    { email } = req.params
+    if not email
+      throw new errors.UnprocessableEntity 'No email provided.'
+    
+    user = yield User.findByEmail(email)
+    res.send 200, { exists: user? }

@@ -8,12 +8,12 @@ channelSchemas =
   'errors': require 'schemas/subscriptions/errors'
   'ipad': require 'schemas/subscriptions/ipad'
   'misc': require 'schemas/subscriptions/misc'
-  'multiplayer': require 'schemas/subscriptions/multiplayer'
   'play': require 'schemas/subscriptions/play'
   'surface': require 'schemas/subscriptions/surface'
   'tome': require 'schemas/subscriptions/tome'
   'god': require 'schemas/subscriptions/god'
   'scripts': require 'schemas/subscriptions/scripts'
+  'web-dev': require 'schemas/subscriptions/web-dev'
   'world': require 'schemas/subscriptions/world'
 
 definitionSchemas =
@@ -165,5 +165,5 @@ window.onbeforeunload = (e) ->
     return leavingMessage
   else
     return
-  
+
 $ -> init()

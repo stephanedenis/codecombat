@@ -6,7 +6,9 @@ Promise = require 'bluebird'
 nock = require 'nock'
 request = require '../request'
 sendwithus = require '../../../server/sendwithus'
+mongoose = require 'mongoose'
 LevelSession = require '../../../server/models/LevelSession'
+OAuthProvider = require '../../../server/models/OAuthProvider'
 
 urlLogin = getURL('/auth/login')
 urlReset = getURL('/auth/reset')
@@ -24,18 +26,6 @@ describe 'POST /auth/login', ->
     yield utils.becomeAnonymous()
     done()
 
-  it 'allows logging in by iosIdentifierForVendor', utils.wrap (done) ->
-    yield utils.initUser({
-      'iosIdentifierForVendor': '012345678901234567890123456789012345'
-      'password': '12345'
-    })
-    [res, body] = yield request.postAsync({uri: urlLogin, json: {
-      username: '012345678901234567890123456789012345'
-      password: '12345'
-    }})
-    expect(res.statusCode).toBe(200)
-    done()    
-
   it 'returns 401 when the user does not exist', utils.wrap (done) ->
     [res, body] = yield request.postAsync({uri: urlLogin, json: {
       username: 'some@email.com'
@@ -51,6 +41,19 @@ describe 'POST /auth/login', ->
     })
     [res, body] = yield request.postAsync({uri: urlLogin, json: {
       username: 'some@email.com'
+      password: '12345'
+    }})
+    expect(res.statusCode).toBe(200)
+    done()
+    
+  it 'allows login by username', utils.wrap (done) ->
+    yield utils.initUser({
+      name: 'Some name that will be lowercased...'
+      'email': 'some@email.com'
+      'password': '12345'
+    })
+    [res, body] = yield request.postAsync({uri: urlLogin, json: {
+      username: 'Some name that will be lowercased...'
       password: '12345'
     }})
     expect(res.statusCode).toBe(200)
@@ -165,6 +168,14 @@ describe 'GET /auth/unsubscribe', ->
     expect(res.statusCode).toBe(404)
     done()
     
+  it 'returns 200 even if the email has a + in it', utils.wrap (done) ->
+    @user.set('email', 'some+email@address.com')
+    yield @user.save()
+    url = getURL('/auth/unsubscribe?recruitNotes=1&email='+@user.get('email'))
+    [res, body] = yield request.getAsync(url, {json: true})
+    expect(res.statusCode).toBe(200)
+    done()
+    
   describe '?recruitNotes=1', ->
 
     it 'unsubscribes the user from recruitment emails', utils.wrap (done) ->
@@ -222,18 +233,20 @@ describe 'GET /auth/name', ->
     expect(res.statusCode).toBe 422
     done()
 
-  it 'returns the name given if there is no conflict', utils.wrap (done) ->
-    [res, body] = yield request.getAsync {url: getURL(url + '/Gandalf'), json: {}}
+  it 'returns an object with properties conflicts, givenName and suggestedName', utils.wrap (done) ->
+    [res, body] = yield request.getAsync {url: getURL(url + '/Gandalf'), json: true}
     expect(res.statusCode).toBe 200
-    expect(res.body.name).toBe 'Gandalf'
-    done()
+    expect(res.body.givenName).toBe 'Gandalf'
+    expect(res.body.conflicts).toBe false
+    expect(res.body.suggestedName).toBe 'Gandalf'
 
-  it 'returns a new name in case of conflict', utils.wrap (done) ->
     yield utils.initUser({name: 'joe'})
     [res, body] = yield request.getAsync {url: getURL(url + '/joe'), json: {}}
-    expect(res.statusCode).toBe 409
-    expect(res.body.name).not.toBe 'joe'
-    expect(/joe[0-9]/.test(res.body.name)).toBe(true)
+    expect(res.statusCode).toBe 200
+    expect(res.body.suggestedName).not.toBe 'joe'
+    expect(res.body.conflicts).toBe true
+    expect(/joe[0-9]/.test(res.body.suggestedName)).toBe(true)
+
     done()
 
     
@@ -305,7 +318,58 @@ describe 'POST /auth/login-gplus', ->
     [res, body] = yield request.postAsync url, { json: { gplusID: '1234', gplusAccessToken: 'abcd' }}
     expect(res.statusCode).toBe(404)
     done()
-          
+
+
+describe 'GET /auth/login-o-auth', ->
+
+  beforeEach utils.wrap (done) ->
+    yield utils.clearModels([User])
+    @provider = new OAuthProvider({
+      lookupUrlTemplate: 'https://oauth.provider/user?t=<%= accessToken %>'
+      tokenUrl: 'https://oauth.provider/oauth2/token'
+    })
+    @provider.save()
+    @user = yield utils.initUser({oAuthIdentities: [{provider: @provider._id, id: 'abcd'}]})
+    @providerNock = nock('https://oauth.provider')
+    @providerLookupRequest = @providerNock.get('/user?t=1234')
+    @url = utils.getURL("/auth/login-o-auth")
+    @qs = { provider: @provider.id, accessToken: '1234' }
+    done()
+
+  it 'logs the user in', utils.wrap (done) ->
+    @providerLookupRequest.reply(200, {id: 'abcd'})
+    [res, body] = yield request.getAsync({ @url, @qs, json:true, followRedirect:false })
+    expect(res.statusCode).toBe(302)
+    [res, body] = yield request.getAsync({ url: utils.getURL('/auth/whoami'), json: true })
+    expect(res.body._id).toBe(@user.id)
+    done()
+    
+  it 'can take a code and do a token lookup', utils.wrap (done) ->
+    @providerNock.get('/oauth2/token').reply(200, {access_token: '1234'})
+    @providerLookupRequest.reply(200, {id: 'abcd'})
+    qs =  { provider: @provider.id, code: 'xyzzy' }
+    [res, body] = yield request.getAsync({ @url, qs, json:true, followRedirect:false })
+    expect(res.statusCode).toBe(302)
+    done()
+
+  it 'returns 422 if "provider" and "accessToken" are not provided', utils.wrap (done) ->
+    qs = {}
+    [res, body] = yield request.getAsync({ @url, qs })
+    expect(res.statusCode).toBe(422)
+    done()
+
+  it 'returns 404 if the provider is not found', utils.wrap (done) ->
+    qs = { provider: new mongoose.Types.ObjectId() + '', accessToken: '1234' }
+    [res, body] = yield request.getAsync({ @url, qs })
+    expect(res.statusCode).toBe(404)
+    done()
+
+  it 'returns 422 if the token lookup fails', utils.wrap (done) ->
+    @providerLookupRequest.reply(400, {})
+    [res, body] = yield request.getAsync({ @url, @qs })
+    expect(res.statusCode).toBe(422)
+    done()
+
       
 describe 'POST /auth/spy', ->
   beforeEach utils.wrap (done) ->

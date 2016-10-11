@@ -17,7 +17,7 @@ describe 'GET /db/article', ->
     yield utils.loginUser(@admin)
     yield request.postAsync(getURL('/db/article'), { json: articleData1 })
     yield request.postAsync(getURL('/db/article'), { json: articleData2 })
-    yield utils.logout()
+    yield utils.becomeAnonymous()
     done()
       
       
@@ -147,13 +147,7 @@ describe 'POST /db/article', ->
     body = @res.body
     expect(body.original).toBe(body._id)
     
-  
-  it 'returns 422 when no input is provided', utils.wrap (done) ->
-    [res, body] = yield request.postAsync { uri: getURL('/db/article') }
-    expect(res.statusCode).toBe(422)
-    done()
-
-      
+    
   it 'allows you to set Article\'s editableProperties', ->
     expect(@body.name).toBe('Article')
     
@@ -194,7 +188,7 @@ describe 'POST /db/article', ->
     
   it 'does not allow anonymous users to create Articles', utils.wrap (done) ->
     yield utils.clearModels([Article])
-    yield utils.logout()
+    yield utils.becomeAnonymous()
     [res, body] = yield request.postAsync({uri: getURL('/db/article'), json: articleData })
     expect(res.statusCode).toBe(401)
     done()
@@ -451,7 +445,7 @@ describe 'POST /db/article/:handle/new-version', ->
 
 
   it 'does not work for anonymous users', utils.wrap (done) ->
-    yield utils.logout()
+    yield utils.becomeAnonymous()
     yield postNewVersion({ name: 'Article name', body: 'New body' }, 401)
     articles = yield Article.find()
     expect(articles.length).toBe(1)
@@ -580,7 +574,7 @@ describe 'GET and POST /db/article/:handle/names', ->
     yield utils.loginUser(admin)
     [res, article1] = yield request.postAsync(getURL('/db/article'), { json: articleData1 })
     [res, article2] = yield request.postAsync(getURL('/db/article'), { json: articleData2 })
-    yield utils.logout()
+    yield utils.becomeAnonymous()
     [res, body] = yield request.getAsync { uri: getURL('/db/article/names?ids='+[article1._id, article2._id].join(',')), json: true }
     expect(body.length).toBe(2)
     expect(body[0].name).toBe('Article 1')
@@ -600,22 +594,23 @@ describe 'GET /db/article/:handle/patches', ->
     [res, article] = yield request.postAsync { uri: getURL('/db/article'), json: articleData }
     expect(res.statusCode).toBe(201)
     [res, patch] = yield request.postAsync { uri: getURL('/db/patch'), json: {
-      delta: []
+      delta: {name:['test']}
       commitMessage: 'Test commit'
       target: {
         collection: 'article'
         id: article._id
       }
     }}
+    expect(res.statusCode).toBe(201)
     [res, patches] = yield request.getAsync getURL("/db/article/#{article._id}/patches"), { json: true }
     expect(res.statusCode).toBe(200)
     expect(patches.length).toBe(1)
     expect(patches[0]._id).toBe(patch._id)
     done()
     
-  it 'returns 422 for invalid object ids', utils.wrap (done) ->
-    [res, body] = yield request.getAsync getURL("/db/article/invalid/patches"), { json: true }
-    expect(res.statusCode).toBe(422)
+  it 'returns 404 for handles that do not exist', utils.wrap (done) ->
+    [res, body] = yield request.getAsync getURL("/db/article/dne/patches"), { json: true }
+    expect(res.statusCode).toBe(404)
     done()
   
     
@@ -679,4 +674,49 @@ describe 'DELETE /db/article/:handle/watchers', ->
     article = yield Article.findById(article._id)
     ids = (id.toString() for id in article.get('watchers'))
     expect(_.contains(ids, user.id)).toBe(false)
+    done()
+
+    
+describe 'POST /db/article/:handle/patch', ->
+  
+  it 'creates a new version if the changes are translation only', utils.wrap (done) ->
+    # create article
+    yield utils.clearModels([Article])
+    admin = yield utils.initAdmin()
+    yield utils.loginUser(admin)
+    article = yield utils.makeArticle()
+    
+    # submit a translation patch
+    user = yield utils.initUser()
+    yield utils.loginUser(user)
+    
+    originalArticle = article.toObject()
+    changedArticle = _.extend({}, originalArticle, {i18n: {de: {name: 'Name in German'}}})
+    json = {
+      delta: jsondiffpatch.diff(originalArticle, changedArticle)
+      commitMessage: 'Server test commit'
+      target: {
+        collection: 'article'
+        id: article.id
+      }
+    }
+    url = utils.getURL("/db/article/#{article.id}/patch")
+    [res, body] = yield request.postAsync({ url, json })
+    expect(res.statusCode).toBe(201)
+    
+    [firstArticle, secondArticle] = yield Article.find().sort('_id')
+    
+    expectedVersion = { isLatestMinor: false, isLatestMajor: false, minor: 0, major: 0 }
+    expect(_.isEqual(firstArticle.get('version'), expectedVersion)).toBe(true)
+
+    expectedVersion = { isLatestMinor: true, isLatestMajor: true, minor: 1, major: 0 }
+    expect(_.isEqual(secondArticle.get('version'), expectedVersion)).toBe(true)
+    
+    expect(firstArticle.get('i18n.de.name')).toBe(undefined)
+    expect(secondArticle.get('i18n.de.name')).toBe('Name in German')
+    expect(firstArticle.get('creator').equals(admin._id)).toBe(true)
+    expect(secondArticle.get('creator').equals(user._id)).toBe(true)
+    expect(firstArticle.get('commitMessage')).toBeUndefined()
+    expect(secondArticle.get('commitMessage')).toBe('Server test commit')
+    
     done()

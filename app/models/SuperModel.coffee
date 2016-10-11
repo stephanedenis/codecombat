@@ -247,6 +247,15 @@ module.exports = class SuperModel extends Backbone.Model
 
   getResource: (rid) ->
     return @resources[rid]
+    
+  # Promises
+  finishLoading: ->
+    new Promise (resolve, reject) =>
+      return resolve(@) if @finished()
+      @once 'failed', ({resource}) ->
+        jqxhr = resource.jqxhr
+        reject({message: jqxhr.responseJSON?.message or jqxhr.responseText or 'Unknown Error'})
+      @once 'loaded-all', => resolve(@)
 
 class Resource extends Backbone.Model
   constructor: (name, value=1) ->
@@ -286,11 +295,39 @@ class ModelResource extends Resource
     @model = modelOrCollection
     @fetchOptions = fetchOptions
     @jqxhr = @model.jqxhr
+    @loadsAttempted = 0
 
   load: ->
     @markLoading()
     @fetchModel()
     @
+
+#    # TODO: Track progress on requests and don't retry if progress was made recently.
+#    # Probably use _.debounce and attach event listeners to xhr objects.
+#    
+#    # This logic is for handling failed responses for level loading.
+#    timeToWait = 5000
+#    tryLoad = =>
+#      return if this.isLoaded
+#      if @loadsAttempted > 4
+#        @markFailed()
+#        return @
+#      @markLoading()
+#      @model.loading = false # So fetchModel can run again
+#      if @loadsAttempted > 0
+#        console.log "Didn't load model in #{timeToWait}ms (attempt ##{@loadsAttempted}), trying again: ", _.result(@model, 'url')
+#      @fetchModel()
+#      @listenTo @model, 'error', (levelComponent, request) ->
+#        if request.status not in [408, 504, 522, 524]
+#          clearTimeout(@timeoutID)
+#      clearTimeout(@timeoutID) if @timeoutID
+#      @timeoutID = setTimeout(tryLoad, timeToWait)
+#      if application.testing
+#        application.timeoutsToClear?.push(@timeoutID)
+#      @loadsAttempted += 1
+#      timeToWait *= 1.5
+#    tryLoad()
+#    @
 
   fetchModel: ->
     @jqxhr = @model.fetch(@fetchOptions) unless @model.loading

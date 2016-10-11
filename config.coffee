@@ -5,6 +5,7 @@ sysPath = require 'path'
 fs = require('fs')
 commonjsHeader = require('commonjs-require-definition')
 TRAVIS = process.env.COCO_TRAVIS_TEST
+console.log 'Travis Build' if TRAVIS
 
 
 #- regJoin replace a single '/' with '[\/\\]' so it can handle either forward or backslash
@@ -72,7 +73,9 @@ exports.config =
         ]
 
         #- Karma is a bit more tricky to get to work. For now just dump everything into one file so it doesn't need to load anything through ModuleLoader.
-        'javascripts/whole-app.js': if TRAVIS then regJoin('^app') else []
+        'javascripts/whole-app.js': if TRAVIS then [
+          regJoin('^app')
+        ] else []
 
         #- Wads. Groups of modules by folder which are loaded as a group when needed.
         'javascripts/app/lib.js': regJoin('^app/lib')
@@ -110,14 +113,12 @@ exports.config =
         'javascripts/lodash.js': regJoin('^bower_components/lodash/dist/lodash.js')
         'javascripts/aether.js': regJoin('^bower_components/aether/build/aether.js')
         'javascripts/esper.js': 'bower_components/esper.js/esper.js'
-        'javascripts/app/vendor/aether-clojure.js': 'bower_components/aether/build/clojure.js'
         'javascripts/app/vendor/aether-coffeescript.js': 'bower_components/aether/build/coffeescript.js'
-        'javascripts/app/vendor/aether-io.js': 'bower_components/aether/build/io.js'
         'javascripts/app/vendor/aether-javascript.js': 'bower_components/aether/build/javascript.js'
         'javascripts/app/vendor/aether-lua.js': 'bower_components/aether/build/lua.js'
         'javascripts/app/vendor/aether-java.js': 'bower_components/aether/build/java.js'
         'javascripts/app/vendor/aether-python.js': 'bower_components/aether/build/python.js'
-        'javascripts/app/vendor/aether-java.js': 'bower_components/aether/build/java.js'
+        'javascripts/app/vendor/aether-html.js': 'bower_components/aether/build/html.js'
 
         # Any vendor libraries we don't want the client to load immediately
         'javascripts/app/vendor/d3.js': regJoin('^bower_components/d3')
@@ -128,6 +129,8 @@ exports.config =
         'javascripts/app/vendor/jasmine-bundle.js': regJoin('^vendor/scripts/jasmine')
         'javascripts/app/vendor/jasmine-mock-ajax.js': 'vendor/scripts/jasmine-mock-ajax.js'
         'javascripts/app/vendor/three.js': 'bower_components/three.js/three.min.js'
+        'javascripts/app/vendor/htmlparser2.js': 'vendor/scripts/htmlparser2.js'
+        'javascripts/app/vendor/deku.js': 'vendor/scripts/deku.js'
 
         #- test, demo libraries
         'javascripts/app/tests.js': regJoin('^test/app/')
@@ -208,7 +211,8 @@ exports.config =
     assetsmanager:
       copyTo:
         'lib/ace': ['node_modules/ace-builds/src-min-noconflict/*']
-        'fonts': ['bower_components/openSansCondensed/*', 'bower_components/openSans/*']
+        'fonts': ['bower_components/openSansCondensed/!(*bower.json)', 'bower_components/openSans/!(*bower.json)']
+        'javascripts': ['bower_components/esper.js/esper.modern.js']
     autoReload:
       delay: 1000
 

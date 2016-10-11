@@ -36,14 +36,35 @@ if (database.generateMongoConnectionString() !== dbString) {
   throw Error('Stopping server tests because db connection string was not as expected.');
 }
 
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000 * 120; // for long Stripe tests
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000 * 15; // for long Stripe tests
 require('../server/common'); // Make sure global testing functions are set up
+
+// Ignore Stripe/Nocking erroring
+console.error = function() {
+  try {
+    if(arguments[1].stack.indexOf('An error occurred with our connection to Stripe') > -1)
+      return;
+  }
+  catch (e) { }
+  console.log.apply(console, arguments);
+};
+
+if (process.argv.indexOf('--with-test-names') > -1) {
+  jasmine.getEnv().addReporter({
+    specStarted: function(result){
+      // Printing weirdly so pass/fail indicator is on the same line as the test name
+      process.stdout.write('\n' + result.fullName);
+    }
+  })
+}
 
 var initialized = false;
 beforeEach(function(done) {
   if (initialized) {
     return done();
   }
+  console.log('/spec/helpers/helper.js - Initializing spec environment...');
+  var User = require('../../server/models/User');
 
   var async = require('async');
   async.series([
@@ -54,7 +75,6 @@ beforeEach(function(done) {
     },
     function(cb) {
       // 5. Check actual database
-      var User = require('../../server/models/User');
       User.find({}).count(function(err, count) {
         // For this to serve as a line of defense against testing with the
         // production DB, tests must be run with 
@@ -77,6 +97,23 @@ beforeEach(function(done) {
       });
     },
     function(cb) {
+      // Make sure User schemas are created
+      // TODO: Ensure all models are fully indexed before starting tests
+      User.on('index', cb)
+    },
+    function(cb) {
+      // Initialize products
+      var utils = require('../server/utils');
+      request = require('../server/request');
+      utils.initUser()
+        .then(function (user) {
+          return utils.loginUser(user, {request: request})
+        })
+        .then(function () {
+          cb()
+        });
+    },    
+    function(cb) {
       // Initialize products
       request = require('../server/request');
       request.get(getURL('/db/products'), function(err, res, body) {
@@ -91,6 +128,7 @@ beforeEach(function(done) {
       process.exit(1);
     }
     initialized = true;
+    console.log('/spec/helpers/helper.js - Done');
     done();
   });
 });

@@ -1,6 +1,7 @@
 Level = require 'models/Level'
 Course = require 'models/Course'
 Courses = require 'collections/Courses'
+Campaign = require 'models/Campaign'
 User = require 'models/User'
 Classroom = require 'models/Classroom'
 LevelSession = require 'models/LevelSession'
@@ -9,6 +10,7 @@ Achievement = require 'models/Achievement'
 EarnedAchievement = require 'models/EarnedAchievement'
 ThangType = require 'models/ThangType'
 Users = require 'collections/Users'
+Prepaid = require 'models/Prepaid'
 
 module.exports = {
 
@@ -17,16 +19,35 @@ module.exports = {
     attrs = _.extend({}, {
       _id: _id
       name: _.string.humanize(_id)
+      releasePhase: 'released'
+      concepts: []
     }, attrs)
     
     attrs.campaignID ?= sources.campaign?.id or _.uniqueId('campaign_')
     return new Course(attrs)
   
+  makeCampaign: (attrs, sources={}) ->
+    _id = _.uniqueId('campaign_')
+    attrs = _.extend({}, {
+      _id
+      name: _.string.humanize(_id)
+      levels: [@makeLevel(), @makeLevel()]
+    }, attrs)
+
+    if sources.levels
+      levelsMap = {}
+      sources.levels.each (level) ->
+        levelsMap[level.id] = level
+      attrs.levels = levelsMap
+
+    return new Campaign(attrs)
+
   makeLevel: (attrs) ->
     _id = _.uniqueId('level_')
     attrs = _.extend({}, {
       _id: _id
       name: _.string.humanize(_id)
+      slug: _.string.dasherize(_id)
       original: _id+'_original'
       version:
         major: 0
@@ -36,7 +57,7 @@ module.exports = {
     }, attrs)
     return new Level(attrs)
   
-  makeUser: (attrs) ->
+  makeUser: (attrs, sources={}) ->
     _id = _.uniqueId('user_')
     attrs = _.extend({
       _id: _id
@@ -45,6 +66,10 @@ module.exports = {
       anonymous: false
       name: _.string.humanize(_id)
     }, attrs)
+    
+    if sources.prepaid and not attrs.coursePrepaid
+      attrs.coursePrepaid = sources.prepaid.pick('_id', 'startDate', 'endDate')
+    
     return new User(attrs)
   
   makeClassroom: (attrs, sources={}) ->
@@ -69,7 +94,7 @@ module.exports = {
       break if not courseAttrs
       course ?= @makeCourse()
       levels ?= new Levels()
-      courseAttrs.levels = (level.pick('_id', 'slug', 'name', 'original', 'type') for level in levels.models)
+      courseAttrs.levels = (level.pick('_id', 'slug', 'name', 'original', 'primerLanguage', 'type') for level in levels.models)
   
     # populate members
     if not attrs.members
@@ -86,6 +111,7 @@ module.exports = {
         original: level.get('original'),
       creator: creator.id,
     }, attrs)
+    attrs.level.primerLanguage = level.get('primerLanguage') if level.get('primerLanguage')
     return new LevelSession(attrs)
   
   makeCourseInstance: (attrs, sources={}) ->
@@ -148,6 +174,38 @@ module.exports = {
     }, attrs)
     return new ThangType(attrs)
 
-} 
+  makePrepaid: (attrs, sources={}) ->
+    _id = _.uniqueId('prepaid_')
+    attrs = _.extend({}, {
+      _id
+      type: 'course'
+      maxRedeemers: 10
+      endDate: moment().add(1, 'month').toISOString()
+      startDate: moment().subtract(1, 'month').toISOString()
+    }, attrs)
+    
+    if not attrs.redeemers
+      redeemers = sources.redeemers or new Users()
+      attrs.redeemers = ({
+        userID: redeemer.id
+        date: moment().subtract(1, 'month').toISOString()
+      } for redeemer in redeemers.models)
+    
+    return new Prepaid(attrs)
+    
+  makeTrialRequest: (attrs, sources={}) ->
+    _id = _.uniqueId('trial_request_')
+    attrs = _.extend({}, {
+      _id
+      properties: {
+        firstName: 'Mr'
+        lastName: 'Professorson'
+        name: 'Mr Professorson'
+        email: 'an@email.com'
+        phoneNumber: '555-555-5555'
+        organization: 'Greendale'
+        district: 'Green District'
+      }
+    }, attrs)
+}
   
-

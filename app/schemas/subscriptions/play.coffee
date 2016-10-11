@@ -96,8 +96,6 @@ module.exports =
 
   'playback:stop-real-time-playback': c.object {}
 
-  'playback:real-time-playback-waiting': c.object {}
-
   'playback:real-time-playback-started': c.object {}
 
   'playback:real-time-playback-ended': c.object {}
@@ -119,6 +117,7 @@ module.exports =
 
   'level:show-victory': c.object {required: ['showModal']},
     showModal: {type: 'boolean'}
+    manual: { type: 'boolean' }
 
   'level:highlight-dom': c.object {required: ['selector']},
     selector: {type: 'string'}

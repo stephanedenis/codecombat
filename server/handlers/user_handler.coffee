@@ -43,8 +43,8 @@ UserHandler = class UserHandler extends Handler
     props.push 'jobProfileApproved', 'jobProfileNotes','jobProfileApprovedDate' if req.user.isAdmin()  # Admins naturally edit these
     props.push @privateProperties... if req.user.isAdmin()  # Admins are mad with power
     if not req.user.isAdmin()
-      if document.isTeacher() and req.body.role not in User.teacherRoles 
-        props = _.without props, 'role' 
+      if document.isTeacher() and req.body.role not in User.teacherRoles
+        props = _.without props, 'role'
     props
 
   formatEntity: (req, document, publicOnly=false) =>
@@ -91,6 +91,12 @@ UserHandler = class UserHandler extends Handler
     # Email setting
     (req, user, callback) ->
       return callback(null, req, user) unless req.body.email?
+      
+      # handle unsetting email
+      if req.body.email is ''
+        user.set('email', req.body.email)
+        return callback(null, req, user)
+        
       emailLower = req.body.email.toLowerCase()
       return callback(null, req, user) if emailLower is user.get('emailLower')
       User.findOne({emailLower: emailLower}).exec (err, otherUser) ->
@@ -103,23 +109,28 @@ UserHandler = class UserHandler extends Handler
             return callback(res: 'Facebook user login error.', code: 500) if err
             return callback(null, req, otherUser)
           )
-        r = {message: 'is already used by another account', property: 'email'}
+        r = {message: 'is already used by another account', property: 'email', code: 409}
         return callback({res: r, code: 409}) if otherUser
         user.set('email', req.body.email)
         callback(null, req, user)
 
     # Name setting
     (req, user, callback) ->
-      return callback(null, req, user) unless req.body.name
+      return callback(null, req, user) unless req.body.name?
+      
+      if req.body.name is ''
+        user.set('name', req.body.name)
+        return callback(null, req, user)
+      
       nameLower = req.body.name?.toLowerCase()
-      return callback(null, req, user) unless nameLower
+      return callback(null, req, user) unless nameLower?
       return callback(null, req, user) if user.get 'anonymous' # anonymous users can have any name
       return callback(null, req, user) if nameLower is user.get('nameLower')
       User.findOne({nameLower: nameLower, anonymous: false}).exec (err, otherUser) ->
         log.error "Database error setting user name: #{err}" if err
         return callback(res: 'Database error.', code: 500) if err
-        r = {message: 'is already used by another account', property: 'name'}
-        console.log 'Another user exists' if otherUser
+        r = {message: 'is already used by another account', property: 'name', code: 409}
+        log.info 'Another user exists' if otherUser
         return callback({res: r, code: 409}) if otherUser
         user.set('name', req.body.name)
         callback(null, req, user)
@@ -345,9 +356,9 @@ UserHandler = class UserHandler extends Handler
       stripe.customers.retrieve customerID, (err, customer) =>
         return @sendDatabaseError(res, err) if err
         info = card: customer.sources?.data?[0]
-        findStripeSubscription customerID, subscriptionID: user.get('stripe').subscriptionID, (subscription) =>
+        findStripeSubscription customerID, subscriptionID: user.get('stripe').subscriptionID, (err, subscription) =>
           info.subscription = subscription
-          findStripeSubscription customerID, subscriptionID: user.get('stripe').sponsorSubscriptionID, (subscription) =>
+          findStripeSubscription customerID, subscriptionID: user.get('stripe').sponsorSubscriptionID, (err, subscription) =>
             info.sponsorSubscription = subscription
             @sendSuccess(res, JSON.stringify(info, null, '\t'))
 
@@ -401,14 +412,14 @@ UserHandler = class UserHandler extends Handler
         name: sponsor.get('name')
 
       # Get recipient subscription info
-      findStripeSubscription sponsor.get('stripe').customerID, userID: req.user.id, (subscription) =>
+      findStripeSubscription sponsor.get('stripe')?.customerID, userID: req.user.id, (err, subscription) =>
         info.subscription = subscription
         @sendDatabaseError(res, 'No sponsored subscription found') unless info.subscription?
         @sendSuccess(res, info)
 
   getSubSponsors: (req, res) ->
     return @sendForbiddenError(res) unless req.user?.isAdmin()
-    Payment.find {$where: 'this.purchaser.valueOf() != this.recipient.valueOf()'}, (err, payments) =>
+    Payment.find {$where: 'this.purchaser && this.recipient && this.purchaser.valueOf() != this.recipient.valueOf()'}, (err, payments) =>
       return @sendDatabaseError(res, err) if err
       sponsorIDs = (payment.get('purchaser') for payment in payments)
       User.find {$and: [{_id: {$in: sponsorIDs}}, {"stripe.sponsorSubscriptionID": {$exists: true}}]}, (err, users) =>
@@ -477,11 +488,11 @@ UserHandler = class UserHandler extends Handler
         {schoolName: {$exists: true}},
         {schoolName: {$ne: ''}}
         ]}
-    User.find(query, {schoolName: 1}).exec (err, documents) =>
+    User.find(query, {schoolName: 1}).lean().exec (err, documents) =>
       return @sendDatabaseError(res, err) if err
       schoolCountMap = {}
       for doc in documents
-        schoolName = doc.get('schoolName')
+        schoolName = doc.schoolName
         schoolCountMap[schoolName] ?= 0;
         schoolCountMap[schoolName]++;
       schoolCounts = []
@@ -489,7 +500,6 @@ UserHandler = class UserHandler extends Handler
         continue unless count >= minCount
         schoolCounts.push schoolName: schoolName, count: count
       @sendSuccess(res, schoolCounts)
-
   agreeToCLA: (req, res) ->
     return @sendForbiddenError(res) unless req.user
     doc =
@@ -686,8 +696,8 @@ UserHandler = class UserHandler extends Handler
 
   buildGravatarURL: (user, size, fallback) ->
     emailHash = @buildEmailHash user
-    fallback ?= 'http://codecombat.com/file/db/thang.type/52a00d55cf1818f2be00000b/portrait.png'
-    fallback = "http://codecombat.com#{fallback}" unless /^http/.test fallback
+    fallback ?= 'https://codecombat.com/file/db/thang.type/52a00d55cf1818f2be00000b/portrait.png'
+    fallback = "https://codecombat.com#{fallback}" unless /^http/.test fallback
     "https://www.gravatar.com/avatar/#{emailHash}?s=#{size}&default=#{fallback}"
 
   buildEmailHash: (user) ->
@@ -712,6 +722,32 @@ UserHandler = class UserHandler extends Handler
       @sendSuccess res, remark
 
   searchForUser: (req, res) ->
+    return @sendForbiddenError(res) unless req.user?.isAdmin()
+    return module.exports.mongoSearchForUser(req,res) unless config.sphinxServer
+    mysql = require('mysql');
+    connection = mysql.createConnection
+      host: config.sphinxServer
+      port: 9306
+    connection.connect()
+
+    q = req.body.search
+    if isID q
+      mysqlq = "SELECT *, WEIGHT() as skey FROM user WHERE mongoid = ? LIMIT 100;"
+    else
+      mysqlq = "SELECT *, WEIGHT() as skey FROM user WHERE MATCH(?)  LIMIT 100;"
+
+    connection.query mysqlq, [q], (err, rows, fields) =>
+      return @sendDatabaseError res, err if err
+      ids = rows.map (r) -> r.mongoid
+      User.find({_id: {$in: ids}}).select({name: 1, email: 1, dateCreated: 1}).lean().exec (err, users) =>
+        return @sendDatabaseError res, err if err
+        out = _.filter _.map ids, (id) => _.find(users, (u) -> String(u._id) is id)
+        console.log(out)
+        @sendSuccess res, out
+    connection.end()
+
+
+  mongoSearchForUser: (req, res) ->
     # TODO: also somehow search the CLAs to find a match amongst those fields and to find GitHub ids
     return @sendForbiddenError(res) unless req.user?.isAdmin()
     search = req.body.search
@@ -775,7 +811,7 @@ UserHandler = class UserHandler extends Handler
         else
           update = $unset: {}
           update.$unset[statKey] = ''
-        console.log "... updating #{userStringID} patches #{statKey} to #{count}, #{usersTotal} players found so far." if count
+        log.info "... updating #{userStringID} patches #{statKey} to #{count}, #{usersTotal} players found so far." if count
         User.findByIdAndUpdate user.get('_id'), update, (err) ->
           log.error err if err?
           doneWithUser()
@@ -801,7 +837,7 @@ UserHandler = class UserHandler extends Handler
       update = {}
       update[method] = {}
       update[method][statName] = count or ''
-      console.log "... updating #{user.get('_id')} patches #{JSON.stringify(query)} #{statName} to #{count}, #{usersTotal} players found so far." if count
+      log.info "... updating #{user.get('_id')} patches #{JSON.stringify(query)} #{statName} to #{count}, #{usersTotal} players found so far." if count
       User.findByIdAndUpdate user.get('_id'), update, doneUpdatingUser
 
     userStream = User.find({anonymous: false}).sort('_id').stream()
@@ -865,7 +901,7 @@ UserHandler = class UserHandler extends Handler
         update = {}
         update[method] = {}
         update[method][statName] = count or ''
-        console.log "... updating #{userStringID} patches #{query} to #{count}, #{usersTotal} players found so far." if count
+        log.info "... updating #{userStringID} patches #{query} to #{count}, #{usersTotal} players found so far." if count
         User.findByIdAndUpdate user.get('_id'), update, doneWithUser
 
   statRecalculators:
@@ -883,7 +919,7 @@ UserHandler = class UserHandler extends Handler
         --numberRunning
         userStream.resume()
         if streamFinished and usersFinished is usersTotal
-          console.log "----------- Finished recalculating statistics for gamesCompleted for #{usersFinished} players. -----------"
+          log.info "----------- Finished recalculating statistics for gamesCompleted for #{usersFinished} players. -----------"
           done?()
       userStream.on 'error', (err) -> log.error err
       userStream.on 'close', -> streamFinished = true
@@ -895,7 +931,7 @@ UserHandler = class UserHandler extends Handler
 
         LevelSession.count {creator: userID, 'state.complete': true}, (err, count) ->
           update = if count then {$set: 'stats.gamesCompleted': count} else {$unset: 'stats.gamesCompleted': ''}
-          console.log "... updating #{userID} gamesCompleted to #{count}, #{usersTotal} players found so far." if Math.random() < 0.001
+          log.info "... updating #{userID} gamesCompleted to #{count}, #{usersTotal} players found so far." if Math.random() < 0.001
           User.findByIdAndUpdate user.get('_id'), update, doneWithUser
 
     articleEdits: (done) ->

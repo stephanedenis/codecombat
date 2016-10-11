@@ -14,7 +14,7 @@ block modal-body-content
       
     .form-group
       label
-        span(data-i18n="courses.description")
+        span(data-i18n="general.description")
         i.spl.text-muted(data-i18n="signup.optional")
       textarea.form-control(name="description" rows=2)= view.classroom.get('description')
       
@@ -65,3 +65,9 @@ block modal-footer-content
       button#save-settings-btn.btn.btn-primary.btn-lg(data-i18n="courses.create_class")
     else
       button#save-settings-btn.btn.btn-primary.btn-lg(data-i18n="common.save_changes")
+      
+    if me.isAdmin()
+      hr
+      // DNT
+      h3 Admin Only
+      button#update-courses-btn.btn.btn-forest.btn-lg Update Courses

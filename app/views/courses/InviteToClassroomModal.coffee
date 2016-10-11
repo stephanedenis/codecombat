@@ -12,7 +12,7 @@ module.exports = class InviteToClassroomModal extends ModalView
   initialize: (options) ->
     @classroom = options.classroom
     @classCode = @classroom.get('codeCamel') || @classroom.get('code')
-    @joinURL = document.location.origin + "/courses?_cc=" + @classCode
+    @joinURL = document.location.origin + "/students?_cc=" + @classCode
 
   onClickSendInvitesButton: ->
     emails = @$('#invite-emails-textarea').val()
@@ -20,17 +20,12 @@ module.exports = class InviteToClassroomModal extends ModalView
     emails = _.filter((_.string.trim(email) for email in emails))
     if not emails.length
       return
-    url = @classroom.url() + '/invite-members'
+    
     @$('#send-invites-btn, #invite-emails-textarea').addClass('hide')
     @$('#invite-emails-sending-alert').removeClass('hide')
     application.tracker?.trackEvent 'Classroom invite via email', category: 'Courses', classroomID: @classroom.id, emails: emails
-
-    $.ajax({
-      url: url
-      data: {emails: emails}
-      method: 'POST'
-      context: @
-      success: ->
+    @classroom.inviteMembers(emails, {
+      success: =>
         @$('#invite-emails-sending-alert').addClass('hide')
         @$('#invite-emails-success-alert').removeClass('hide')
     })

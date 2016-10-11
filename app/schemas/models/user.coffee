@@ -6,7 +6,7 @@ UserSchema = c.object
   default:
     visa: 'Authorized to work in the US'
     music: true
-    name: 'Anoner'
+    name: 'Anonymous'
     autocastDelay: 5000
     emails: {}
     permissions: []
@@ -50,20 +50,35 @@ visa = c.shortString
 
 _.extend UserSchema.properties,
   email: c.shortString({title: 'Email', format: 'email'})
+  emailVerified: { type: 'boolean' }
   iosIdentifierForVendor: c.shortString({format: 'hidden'})
   firstName: c.shortString({title: 'First Name'})
   lastName: c.shortString({title: 'Last Name'})
   gender: {type: 'string'} # , 'enum': ['male', 'female', 'secret', 'trans', 'other']
   # NOTE: ageRange enum changed on 4/27/16 from ['0-13', '14-17', '18-24', '25-34', '35-44', '45-100']
   ageRange: {type: 'string'}  # 'enum': ['13-15', '16-17', '18-24', '25-34', '35-44', '45-100']
-  password: {type: 'string', maxLength: 256, minLength: 2, title: 'Password'}
+  password: c.passwordString
   passwordReset: {type: 'string'}
   photoURL: {type: 'string', format: 'image-file', title: 'Profile Picture', description: 'Upload a 256x256px or larger image to serve as your profile picture.'}
 
   facebookID: c.shortString({title: 'Facebook ID'})
   githubID: {type: 'integer', title: 'GitHub ID'}
   gplusID: c.shortString({title: 'G+ ID'})
-
+  cleverID: c.shortString({title: 'Clever ID'})
+  oAuthIdentities: {
+    description: 'List of OAuth identities this user has.'
+    type: 'array'
+    items: {
+      description: 'A single OAuth identity'
+      type: 'object'
+      properties: {
+        provider: c.objectId()
+        id: { type: 'string', description: 'The service provider\'s id for the user' }
+      }
+    }
+  }
+  clientCreator: c.objectId({description: 'Client which created this user'})
+  
   wizardColor1: c.pct({title: 'Wizard Clothes Color'})  # No longer used
   volume: c.pct({title: 'Volume'})
   music: { type: 'boolean' }
@@ -120,7 +135,7 @@ _.extend UserSchema.properties,
 
   aceConfig: c.object { default: { language: 'python', keyBindings: 'default', invisibles: false, indentGuides: false, behaviors: false, liveCompletion: true }},
     language: {type: 'string', 'enum': ['python', 'javascript', 'coffeescript', 'clojure', 'lua', 'java', 'io']}
-    keyBindings: {type: 'string', 'enum': ['default', 'vim', 'emacs']}
+    keyBindings: {type: 'string', 'enum': ['default', 'vim', 'emacs']}  # Deprecated 2016-05-30; now we just always give them 'default'.
     invisibles: {type: 'boolean' }
     indentGuides: {type: 'boolean' }
     behaviors: {type: 'boolean' }
@@ -283,6 +298,9 @@ _.extend UserSchema.properties,
     pollMiscPatches: c.int()
     campaignTranslationPatches: c.int()
     campaignMiscPatches: c.int()
+    courseTranslationPatches: c.int()
+    courseMiscPatches: c.int()
+    courseEdits: c.int()
     concepts: {type: 'object', additionalProperties: c.int(), description: 'Number of levels completed using each programming concept.'}
 
   earned: c.RewardSchema 'earned by achievements'
@@ -327,9 +345,35 @@ _.extend UserSchema.properties,
   coursePrepaidID: c.objectId({
     description: 'Prepaid which has paid for this user\'s course access'
   })
-  schoolName: {type: 'string'}
+  coursePrepaid: {
+    type: 'object'
+    properties: {
+      _id: c.objectId()
+      startDate: c.stringDate()
+      endDate: c.stringDate()
+    }
+  }
+  enrollmentRequestSent: { type: 'boolean' }
+
+  schoolName: {type: 'string', description: 'Deprecated string. Use "school" object instead.'}
   role: {type: 'string', enum: ["God", "advisor", "parent", "principal", "student", "superintendent", "teacher", "technology coordinator"]}
   birthday: c.stringDate({title: "Birthday"})
+  lastAchievementChecked: c.stringDate({ name: 'Last Achievement Checked' })
+  
+  israelId: {type: 'string', description: 'ID string used just for il.codecombat.com'}
+  school: { 
+    type: 'object', 
+    description: 'Generic property for storing school information. Currently
+                  only used by Israel; if/when we use it for other purposes,
+                  think about how to keep the data consistent.',
+    properties: {
+      name: { type: 'string' }
+      city: { type: 'string' }
+      district: { type: 'string' }
+      state: { type: 'string' }
+      country: { type: 'string' }
+    }
+  }
 
 c.extendBasicProperties UserSchema, 'user'
 

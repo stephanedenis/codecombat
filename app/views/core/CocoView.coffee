@@ -14,12 +14,14 @@ doNothing = ->
 
 module.exports = class CocoView extends Backbone.View
   cache: false # signals to the router to keep this view around
+  retainSubviews: false # set to true if you don't want subviews to be destroyed whenever the view renders
   template: -> ''
 
   events:
     'click #loading-error .login-btn': 'onClickLoadingErrorLoginButton'
     'click #loading-error #create-account-btn': 'onClickLoadingErrorCreateAccountButton'
     'click #loading-error #logout-btn': 'onClickLoadingErrorLogoutButton'
+    'click .contact-modal': 'onClickContactModal'
 
   subscriptions: {}
   shortcuts: {}
@@ -52,6 +54,12 @@ module.exports = class CocoView extends Backbone.View
     @listenTo(@supermodel, 'update-progress', @updateProgress)
     @listenTo(@supermodel, 'failed', @onResourceLoadFailed)
     @warnConnectionError = _.throttle(@warnConnectionError, 3000)
+
+    # Warn about easy-to-create race condition that only shows up in production
+    listenedSupermodel = @supermodel
+    _.defer =>
+      if listenedSupermodel isnt @supermodel and not @destroyed
+        throw new Error("#{@constructor?.name ? @}: Supermodel listeners not hooked up! Don't reassign @supermodel; CocoView does that for you.")
 
     super arguments...
 
@@ -108,11 +116,18 @@ module.exports = class CocoView extends Backbone.View
 
   render: ->
     return @ unless me
-    view.destroy() for id, view of @subviews
+    if @retainSubviews
+      oldSubviews = _.values(@subviews)
+    else
+      view.destroy() for id, view of @subviews
     @subviews = {}
     super()
     return @template if _.isString(@template)
     @$el.html @template(@getRenderData())
+
+    if @retainSubviews
+      for view in oldSubviews
+        @insertSubView(view)
 
     if not @supermodel.finished()
       @showLoading()
@@ -168,6 +183,16 @@ module.exports = class CocoView extends Backbone.View
     msg = $.i18n.t 'loading_error.connection_failure', defaultValue: 'Connection failed.'
     noty text: msg, layout: 'center', type: 'error', killer: true, timeout: 3000
 
+  onClickContactModal: (e) ->
+    if me.isTeacher()
+      if application.isProduction()
+        window.Intercom?('show')
+      else
+        alert('Teachers, Intercom widget only available in production.')
+    else
+      ContactModal = require 'views/core/ContactModal'
+      @openModalView(new ContactModal())
+
   onClickLoadingErrorLoginButton: (e) ->
     e.stopPropagation() # Backbone subviews and superviews will handle this call repeatedly otherwise
     AuthModal = require 'views/core/AuthModal'
@@ -214,6 +239,7 @@ module.exports = class CocoView extends Backbone.View
     window.currentModal = modalView
     @getRootView().stopListeningToShortcuts(true)
     Backbone.Mediator.publish 'modal:opened', {}
+    modalView
 
   modalClosed: =>
     visibleModal.willDisappear() if visibleModal
@@ -306,11 +332,20 @@ module.exports = class CocoView extends Backbone.View
     key = @makeSubViewKey(view)
     @subviews[key].destroy() if key of @subviews
     elToReplace ?= @$el.find('#'+view.id)
-    elToReplace.after(view.el).remove()
-    @registerSubView(view, key)
-    view.render()
-    view.afterInsert()
-    view
+    if @retainSubviews
+      @registerSubView(view, key)
+      if elToReplace[0]
+        view.setElement(elToReplace[0])
+        view.render()
+        view.afterInsert()
+      return view
+
+    else
+      elToReplace.after(view.el).remove()
+      @registerSubView(view, key)
+      view.render()
+      view.afterInsert()
+      return view
 
   registerSubView: (view, key) ->
     # used to register views which are custom inserted into the view,
@@ -478,6 +513,15 @@ module.exports = class CocoView extends Backbone.View
 
   playSound: (trigger, volume=1) ->
     Backbone.Mediator.publish 'audio-player:play-sound', trigger: trigger, volume: volume
+
+  tryCopy: ->
+    try
+      document.execCommand('copy')
+    catch err
+      message = 'Oops, unable to copy'
+      noty text: message, layout: 'topCenter', type: 'error', killer: false
+
+  wait: (event) -> new Promise((resolve) => @once(event, resolve))
 
 mobileRELong = /(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i
 

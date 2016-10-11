@@ -28,7 +28,7 @@ module.exports =
     trialRequest.set 'type', attrs.type
     database.validateDoc(trialRequest)
     trialRequest = yield trialRequest.save()
-    delighted.addDelightedUser req.user, trialRequest
+    delighted.addDelightedUser(req.user, trialRequest) if trialRequest.get('type') is 'course'
     res.status(201).send(trialRequest.toObject({req: req}))
 
   put: wrap (req, res) ->
@@ -48,4 +48,9 @@ module.exports =
     throw new errors.Forbidden('May not fetch for anyone but yourself') unless req.user?.id is applicantID
     trialRequests = yield TrialRequest.find({applicant: mongoose.Types.ObjectId(applicantID)})
     trialRequests = (tr.toObject({req: req}) for tr in trialRequests)
+    res.status(200).send(trialRequests)
+
+  getUsers: wrap (req, res, next) ->
+    throw new errors.Unauthorized('You must be an administrator.') unless req.user?.isAdmin()
+    trialRequests = yield TrialRequest.find(status: {$ne: 'denied'}).select('applicant properties').lean()
     res.status(200).send(trialRequests)
